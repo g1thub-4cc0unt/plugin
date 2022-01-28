@@ -49,7 +49,30 @@ require_once(__DIR__. "/../../config.php");
 
 $url = new moodle_url($CFG->wwwroot."/local/analytics/");
 
-$course_name = "Zoo";
+global $DB;
+$course_name = required_param("course", PARAM_TEXT);
+$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
+$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+
+$startDate = null;
+$startDateEpoch = null;
+$endDateEpoch = null;
+$courseId = null;
+if (count($records) > 0){
+    foreach ($records as $course) {
+        $courseId = $course->id;
+        $course_name = $course->fullname;
+        $startDateEpoch = $course->startdate;
+        $endDateEpoch = $course->enddate;
+        $startDate = date('d/m/Y', $course->startdate);
+    }
+}
+else {
+    //Error "Course not found"
+    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
+    return(null);
+}
+
 
 
 
