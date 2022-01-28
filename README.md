@@ -7,4 +7,5 @@ Download Repo as Zip File and install it into Moodle - Site administration > Plu
 In case this should not work drag the plugin in folder into the /moodle/local folder and follow the instructions on the Moodle page.
 
 # Starting
-Access Plugin via {Domain}/moodle/local/analytics/index.php?course=Zoo
+1. Access Plugin via {Domain}/moodle/local/analytics/index.php?course=Zoo
+2. Enter Course Name into the Search Bar
