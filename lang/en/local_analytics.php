@@ -1,1 +1,3 @@
 <?php
+
+$string['Analytics'] = 'Analytics';

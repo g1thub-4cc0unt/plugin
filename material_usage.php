@@ -20,7 +20,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__. "/graph-php-main/graph-php.class.php");
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
@@ -33,7 +32,7 @@ $PAGE->set_url(new moodle_url("/local/analytics/material_usage.php"));
 
     <!-- Layout -->
     <head>
-        <title>Home</title>
+        <title>Material Usage</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
             span.blueColor {
@@ -138,29 +137,17 @@ $PAGE->set_url(new moodle_url("/local/analytics/material_usage.php"));
 
 <?php
 global $DB;
-//Read Course ID, Startdate, Enddate (Use "Course Search" input)
-$course_name = required_param("course", PARAM_TEXT);
-$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+global $CFG;
 
-$startDate = null;
-$startDateEpoch = null;
-$endDateEpoch = null;
-$courseId = null;
-if (count($records) > 0) {
-    foreach ($records as $course) {
-        $courseId = $course->id;
-        $course_name = $course->fullname;
-        $startDateEpoch = $course->startdate;
-        $endDateEpoch = $course->enddate;
-        $startDate = date('d/m/Y', $course->startdate);
-    }
-}
-else {
-    //Error "Course not found"
-    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-    return(null);
-}
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
+
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
 
 //Read Number of enrolled Students in Course
 // SQL Source: https://moodle.org/mod/forum/discuss.php?d=118532#p968575 with slight modifications
@@ -225,6 +212,7 @@ foreach ($resources as $resource){
         WHERE courseid = ? AND userid IN ('$userIDString') 
         AND action='viewed' AND component = 'mod_resource' AND target = 'course_module' AND objectid = ?";
     $resourceViewed = $DB->get_record_sql($sql, [$courseId,$resource->id]);
+    $resource -> name = substr($resource -> name, 0,30);
     $resource -> views = (($resourceViewed -> amountviews)/count($records))*100;
     $resourcesToPrint[] = $resource;
     $resourcesViewed += $resourceViewed -> amountviews;
@@ -232,9 +220,52 @@ foreach ($resources as $resource){
 
 $resourcesViewed = ($resourcesViewed/($amountResources*count($records)))*100;
 
+usort($resourcesToPrint, function ($a, $b) {
+    return ($a->views <= $b->views);});
+
 
 
 ?>
+    <!-- Resources viewed -->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', {'packages':['bar']});
+        google.charts.setOnLoadCallback(drawStuff);
+
+        function drawStuff() {
+            var data = google.visualization.arrayToDataTable([
+                ['Resource', 'Percentage'],
+                <?php
+                foreach($resourcesToPrint as $resource){
+                    echo "['".$resource->name."',".round($resource->views,2)."],";
+                }
+                ?>
+            ]);
+
+            var options = {
+                title: 'Resources Viewed',
+                legend: { position: 'none' },
+                chart: { title: 'Resources Viewed',
+                    subtitle: ' ' },
+                bars: 'horizontal', // Required for Material Bar Charts.
+                hAxis: {
+                    viewWindow:{
+                        max:100,
+                        title: 'Percent',
+                    }
+                }
+            };
+
+            var chart = new google.charts.Bar(document.getElementById('chart_material_usage'));
+            chart.draw(data, options);
+        };
+    </script>
+
+    <!-- Heading View -->
+    <div style="position: fixed;top: 70px; left:125px; font-family: Arial; z-index: 4">
+        <h2>Material Usage</h2>
+    </div>
+
     <!-- Forum Read - Forum Viewed - Percentage -->
 
     <div style="display:flex; position: absolute;right:5%; top: 10%;width: 90%;justify-content:space-evenly;" >
@@ -250,44 +281,8 @@ $resourcesViewed = ($resourcesViewed/($amountResources*count($records)))*100;
 
 
         <div style="overflow-y: scroll; width:40%;  ">
-
             <!-- Resources Viewed -->
-            <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-                <div style="width:25%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Name</span> </div>
-                <div style="width:15%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Viewed</span> </div>
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Type</span> </div>
-
-            </div>
-
-            <br>
-            <hr>
-            <br>
-
-            <!-- List Resources -->
-
-            <?php foreach($resourcesToPrint as $resource){ ?>
-
-
-                <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-
-                    <div style="width:25%;word-wrap:break-word;">
-                        <?php echo $resource->name ?>
-                    </div>
-
-                    <div style="width:15%;">
-                        <?php echo round($resource->views,2)."%" ?>
-                    </div>
-
-                    <div style="width:10%;">
-                        <?php echo""; ?>
-                    </div>
-
-
-                </div>
-                <br>
-                <hr>
-                <br>
-            <?php } ?>
+                <div id="chart_material_usage" style="height:80%;width: 500px"></div>
         </div>
 
 
@@ -331,21 +326,4 @@ $resourcesViewed = ($resourcesViewed/($amountResources*count($records)))*100;
 
     </body>
 <?php
-//Right Arrow
-$analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/material_usage.php");
-echo'<div style=" width:2.5%;
-                height:5%; position:absolute; top:95%; right:2%;">
-   
-    <a href="' . $analytics_url . "?course=". $course_name. '">
-        <img style="height: 100%; width: 100%; object-fit: contain" src="./icons/RightArrow.png" class = "center">
-    </a>
-</div>';
-//Left Arrow
-$analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/grades_time.php");
-echo'<div style=" width:2.5%;
-                height:5%; position:absolute; top:95%; right:4%;">
-   
-    <a href="' . $analytics_url . "?course=". $course_name. '">
-        <img style="height: 100%; width: 100%; object-fit: contain" src="./icons/LeftArrow.png" class = "center">
-    </a>
-</div>';
+

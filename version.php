@@ -26,4 +26,4 @@ $plugin->version = 2021121500;
 $plugin->requires = 2021051704;
 $plugin->component = 'local_analytics';
 $plugin->maturity = MATURITY_ALPHA;
-$plugin->release = 'v.0.0.1';
+$plugin->release = 'v.0.0.2';

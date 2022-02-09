@@ -1,129 +1,223 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+
         img.imageclass {
-            height: 100%; width: 100%;object-fit: contain;
+            height: 25px; width: 25px;object-fit: contain;
         }
-        div.menuButtons{
-            border-radius: 15px;
-            height: auto; width: 90%;
-            padding: 3%;
+
+        /*Input Fields via https://doodlenerd.com/html-control/css-textbox-generator */
+        .inputfield {
+            padding: 5px;
+            font-size: 16px;
+            border-width: 1px;
+            border-color: #3B3C3B;
+            background-color: #FFFFFF;
+            color: #000000;
+            border-style: solid;
+            border-radius: 0px;
         }
-        .menuButtons:hover{
+        .inputfield:focus {
+            outline:none;
+        }
+
+        /* Sidebar https://stackoverflow.com/a/63864082 with slight modifications */
+        #sidebar{
+            width: 65px;
+            height: 100%;
+            background-color:#3B3C3B;
+            position: fixed;
+            z-index: 2;
+            top: 69px;
+            transition: all .3s ease-in-out;
+            overflow: hidden;
+        }
+        #sidebar:hover{
+            width: 230px;
+            z-index: 5;
+        }
+
+        #sidebar a {
+            text-decoration: none;
+            display: block;
+            padding: 20px 20px;
+            letter-spacing: 1px;
+            font-size: 16px;
+            font-weight: bold;
+            font-family: Arial;
+            width: 100%;
+            white-space: nowrap;
+            transition: all .2s ease-in-out;
+        }
+        #sidebar a span {
+            top: 0;
+            opacity: 0;
+        }
+        #sidebar:hover a span {
+            color:white;
+            opacity: 1;
+            transition: all .2s ease-in-out;
+        }
+
+        #sidebar a:hover {
+            background-color: #3B3C3B;
+            width: 190px;
+        }
+
+        #sidebar a:hover,
+        #sidebar a.active {
+            background: #007FFF;
+        }
+
+        /* Tooltip https://www.w3schools.com/howto/howto_css_tooltip.asp with slight modifications */
+        /* Tooltip container */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Tooltip text */
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 120px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            padding: 5px 0;
+            border-radius: 6px;
+
+            /* Position the tooltip text */
+            position: absolute;
+            z-index: 3;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+
+            /* Fade in tooltip */
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        /* Tooltip arrow */
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #555 transparent transparent transparent;
+        }
+
+        /* Show the tooltip text when you mouse over the tooltip container */
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Logout Button*/
+        .logout a:hover {
             background-color: #007FFF;
+            transition: all .2s ease-in-out;
         }
-        .menuButtons:active {
-            background-color: #007FFF;
-        }
+
     </style>
 </head>
-
-<body style="background-color:#EEEEEE">
-
-<!-- Heading - Search Bar -->
-<div style="width:100%;height:6%; top:0.5%; position: absolute;background-image: linear-gradient(to right, #007FFF, #B3D4FF);
-        display: flex;
-        flex-direction: row;
-        justify-content: center">
-
-    <div style="align-self:center">
-        <h2 style="color:white;font-family:arial;">Course: <?php echo "Heading" ?></h2>
-    </div>
-
-    <!-- Course Search Bar -->
-    <div style="position: absolute;  top: 25%;right:5%; ">
-        <form>
-            <input type="search" name="course"
-                   placeholder="Search Course">
-            <button>
-                &#128269;
-            </button>
-        </form>
-    </div>
-
-</div>
-
-
 <?php
 require_once(__DIR__. "/../../config.php");
-
-$url = new moodle_url($CFG->wwwroot."/local/analytics/");
+require_once(__DIR__. "/db/access.php");
+require_once(__DIR__. "/functions.php");
 
 global $DB;
-$course_name = required_param("course", PARAM_TEXT);
-$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+global $CFG;
 
-$startDate = null;
-$startDateEpoch = null;
-$endDateEpoch = null;
-$courseId = null;
-if (count($records) > 0){
-    foreach ($records as $course) {
-        $courseId = $course->id;
-        $course_name = $course->fullname;
-        $startDateEpoch = $course->startdate;
-        $endDateEpoch = $course->enddate;
-        $startDate = date('d/m/Y', $course->startdate);
-    }
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
+
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
+
+
+//Plugin User must be logged in and Role EditingTeacher/Teacher/Admin
+require_login();
+if (!(has_capability('local/analytics:view', CONTEXT_COURSE::instance($course_id)))){
+    redirect("$CFG->wwwroot");
 }
-else {
-    //Error "Course not found"
-    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-    return(null);
-}
+
+$url = new moodle_url($CFG->wwwroot."/local/analytics/");
 
 
 
 
 ?>
-<?php echo $url."index.php?course=".$course_name ?>
+<body style="background-color:#EEEEEE">
+
+<!-- Heading -->
+<div style="width:100%;height:61px;position: absolute;background-image: linear-gradient(to right, #007FFF, #B3D4FF);
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        z-index: 2;
+        position: fixed">
+
+    <div style="align-self:center">
+        <h1 style="color:white;font-family:arial;">Course: <?php echo $course_name ?></h1>
+    </div>
+</div>
+
+
+<!--scrolling no visible on top-->
+<div style="width:100%; height:61px; top: -50px; position: fixed; background-color: #EEEEEE; z-index: 1">
+
+</div>
+
+<!-- Return Back to Course -->
+<div style="right:15px;top:23px; position: fixed; z-index: 5"  class="logout">
+    <a href="<?php echo (new moodle_url('/course/view.php', ['id' => $course_id]));?>" style="height: 34px; width: 34px; border-radius: 10px; display: inline-block">
+        <img src="./icons/google/outline_logout_white_48dp.png" style="height: 32px; width: 32px;">
+    </a>
+</div>
+
 
 <!-- Menu Buttons -->
-<div style=" width:3.5%; height: 100%; background-color:#3B3C3B;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-       ">
 
-    <div style="
-        width:100%;
-        height: 50%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 5%;">
+<div id="sidebar">
+    <a href="<?php echo $url."index.php?courseid=".$course_id ?>">
+        <img src="./icons/google/outline_home_white_48dp.png" class="imageclass">
+        <span>Course Overview</span>
+    </a>
+
+    <a href="<?php echo $url."grades_time.php?courseid=".$course_id ?>">
+        <img src="./icons/google/outline_assessment_white_48dp.png" class="imageclass">
+        <span>Performance</span>
+    </a>
+
+    <a href="<?php echo $url."material_usage.php?courseid=".$course_id ?>">
+        <img src="./icons/google/outline_assessment_white_48dp.png" class="imageclass">
+        <span>Material Usage</span>
+    </a>
 
 
-        <div class="menuButtons" >
-            <a href="<?php echo $url."index.php?course=".$course_name ?>">
-                <img src="./icons/Home.png" class="imageclass">
-            </a>
-        </div>
+    <a href="<?php echo $url."students_overview.php?courseid=".$course_id ?>">
+        <img src="./icons/google/outline_groups_white_48dp.png"class="imageclass">
+        <span>Students</span>
+    </a>
 
-        <div class="menuButtons" >
-            <a href="<?php echo $url."grades_time.php?course=".$course_name ?>">
-                <img src="./icons/Analytics.png" class="imageclass">
-            </a>
-        </div>
 
-        <div class="menuButtons">
-            <a href="<?php echo $url."students_overview.php?course=".$course_name ?>">
-                <img src="./icons/StudentOverview.png"class="imageclass">
-            </a>
-        </div>
+    <a href="<?php echo $url."notes.php?courseid=".$course_id ?>">
+        <img src="./icons/google/outline_description_white_48dp.png" class="imageclass">
+        <span>Notes</span>
+    </a>
 
-        <div class="menuButtons">
-            <a href="<?php echo $url."notes.php?course=".$course_name ?>">
-                <img src="./icons/Notes.png" class="imageclass">
-            </a>
-        </div>
+    <a href="<?php echo $url."faq.php?courseid=".$course_id ?>">
+        <img src="./icons/google/outline_help_outline_white_48dp.png" class="imageclass">
+        <span>FAQ</span>
+    </a>
 
-        <div class="menuButtons">
-            <a href="<?php echo $url."faq.php?course=".$course_name ?>">
-             <img src="./icons/FAQ.png" class="imageclass">
-            </a>
-        </div>
-    </div>
 </div>
 

@@ -20,7 +20,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__. "/graph-php-main/graph-php.class.php");
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
@@ -45,7 +44,10 @@ function getStudent($userID, $courseID) {
     $student -> avgAGrade = getAvgAGrade($userID, $courseID);
     $student -> lastAccess = getLastAccess($userID,$courseID);
     $student -> materialViewed = getResourcesViewed($userID,$courseID);
-    $student -> forumRead = getForumRead($userID,$courseID);
+    $student -> postsRead = getForumRead($userID,$courseID);
+    $student -> postsCreated = getPostsCreated($userID,$courseID);
+    $student -> quizzesTaken = getQuizzesTaken($userID,$courseID);
+    $student -> assignmentsTaken = getAssignmentsTaken($userID,$courseID);
 
     return $student;
 }
@@ -113,7 +115,7 @@ function getForumRead($userID,$courseID){
     $sql = "SELECT count(*) AS amountposts
             FROM {forum_posts} p
             JOIN {forum_discussions} d ON d.id = p.discussion
-            AND d.course = ?";
+            WHERE d.course = ?";
     $amountPosts = $DB->get_record_sql($sql, [$courseID]);
     $amountPosts = $amountPosts -> amountposts;
 
@@ -121,18 +123,51 @@ function getForumRead($userID,$courseID){
     $sql = "SELECT count(*) AS amountpostsread
             FROM {forum_read} r
             JOIN {forum_discussions} d ON d.id = r.discussionid
-            AND d.course = ? AND r.userid = ?";
+            WHERE d.course = ? AND r.userid = ?";
     $amountPostsRead = $DB->get_record_sql($sql, [$courseID, $userID]);
     $amountPostsRead = $amountPostsRead -> amountpostsread;
 
     return (($amountPostsRead/$amountPosts)*100);
 }
+
+function getPostsCreated($userID,$courseID){
+    global $DB;
+    $sql = "SELECT count(*) AS amountposts
+            FROM {forum_posts} p
+            JOIN {forum_discussions} d ON d.id = p.discussion
+            WHERE d.course = ? and p.userid = ?";
+    $amountPosts = $DB->get_record_sql($sql, [$courseID, $userID]);
+    return $amountPosts -> amountposts;
+}
+
+function getQuizzesTaken($userID,$courseID){
+    global $DB;
+    $sql = "SELECT g.*
+            FROM {quiz} q
+            JOIN {quiz_grades} g ON q.id = g.quiz
+            WHERE q.course = ? AND g.userid = ?";
+    $quizzes = $DB->get_records_sql($sql, [$courseID,$userID]);
+    return count($quizzes);
+}
+
+function getAssignmentsTaken($userID,$courseID){
+    global $DB;
+    $sql = "SELECT g.*
+    FROM {assign} a
+    JOIN {assign_grades} g ON a.id = g.assignment
+    WHERE a.course = ?  AND g.userid = ?
+    AND g.grade IS NOT NULL AND g.grade <> -1";
+
+    $assignments = $DB->get_records_sql($sql, [$courseID,$userID]);
+    return count($assignments);
+}
+
 ?>
 
 
     <!-- Layout -->
     <head>
-        <title>Home</title>
+        <title>Students</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
             span.blueColor {
@@ -236,31 +271,18 @@ function getForumRead($userID,$courseID){
 
 
 <?php
-
 global $DB;
-//Read Course ID, Startdate, Enddate (Use "Course Search" input)
-$course_name = required_param("course", PARAM_TEXT);
-$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+global $CFG;
 
-$startDate = null;
-$startDateEpoch = null;
-$endDateEpoch = null;
-$courseId = null;
-if (count($records) > 0) {
-    foreach ($records as $course) {
-        $courseId = $course->id;
-        $course_name = $course->fullname;
-        $startDateEpoch = $course->startdate;
-        $endDateEpoch = $course->enddate;
-        $startDate = date('d/m/Y', $course->startdate);
-    }
-}
-else {
-    //Error "Course not found"
-    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-    return(null);
-}
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
+
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
 
 //Read Number of enrolled Students in Course
 // SQL Source: https://moodle.org/mod/forum/discuss.php?d=118532#p968575 with slight modifications
@@ -324,7 +346,7 @@ if (isset($_POST["sfilter"]) AND $_POST["sfilter"] != ""){
 
 //Needed in Search HTML
 $analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/students_overview.php");
-$url = $analytics_url . "?course=". $course_name;
+$url = $analytics_url . "?courseid=". $course_id;
 
 
 if(True){}
@@ -349,9 +371,104 @@ foreach($studentSearch as $user){
     $students[] = $student;
 }
 
+//Tag Student
+if (isset($_GET['tag']) AND ($_GET['tag'] == "true")) {
+    //Check if Student is part of DB
+    $studentId = $_GET['uid'];
+    $sql = "SELECT count(*) AS amount
+            FROM {local_analytics_tagged}
+            WHERE userid = ? AND courseid = ?";
+    $tagged = $DB->get_record_sql($sql, [$studentId, $courseId]);
+
+    if (($tagged->amount) > 0){
+        $DB->delete_records_select("local_analytics_tagged", 'userid= ?',[$studentId]);
+    }else {
+        //Insert Student into Tagged Database
+        foreach ($students as $student){
+            if ($student -> id == $studentId){
+                break;
+            }
+        }
+        $record = new stdClass();
+        $record->courseid = $courseId;
+        $record->userid = $student->id;
+        $record->name = ($student->firstname) . " " . ($student->lastname);
+        $DB->insert_record("local_analytics_tagged", $record);
+    }
+}
+
+//Students Order by
+if (isset($_GET['sort']) AND (isset($_GET['asc']))) {
+    //Name Ascending
+    if (($_GET['sort'] == "name") AND ($_GET['asc']) == "true") {
+        usort($students, function($a, $b) {return strcmp($a->lastname, $b->lastname);});
+        }
+    //Name Descending
+    elseif(($_GET['sort'] == "name") AND ($_GET['asc']) == "false"){
+        usort($students, function ($a, $b) {
+            return strcmp($a->lastname, $b->lastname);});
+        $students = array_reverse($students);
+        }
+    //Quizzes Taken Ascending
+    elseif(($_GET['sort'] == "qt") AND ($_GET['asc']) == "true"){
+        usort($students, function ($a, $b) {
+            return ($a->quizzesTaken >= $b->quizzesTaken);});
+    }
+    //Quizzes Taken Descending
+    elseif(($_GET['sort'] == "qt") AND ($_GET['asc']) == "false"){
+        usort($students, function ($a, $b) {
+            return ($a->quizzesTaken <= $b->quizzesTaken);});
+    }
+    //Assignments Taken Ascending
+    elseif(($_GET['sort'] == "at") AND ($_GET['asc']) == "true"){
+        usort($students, function ($a, $b) {
+            return ($a->assignmentsTaken >= $b->assignmentsTaken);});
+    }
+    //Assignments Taken Descending
+    elseif(($_GET['sort'] == "at") AND ($_GET['asc']) == "false"){
+        usort($students, function ($a, $b) {
+            return ($a->assignmentsTaken <= $b->assignmentsTaken);});
+    }
+    //Material Viewed Ascending
+    elseif(($_GET['sort'] == "mv") AND ($_GET['asc']) == "true"){
+        usort($students, function ($a, $b) {
+            return ($a->materialViewed >= $b->materialViewed);});
+    }
+    //Material Viewed Descending
+    elseif(($_GET['sort'] == "mv") AND ($_GET['asc']) == "false"){
+        usort($students, function ($a, $b) {
+            return ($a->materialViewed <= $b->materialViewed);});
+    }
+    //Posts Read Ascending
+    elseif(($_GET['sort'] == "pr") AND ($_GET['asc']) == "true"){
+        usort($students, function ($a, $b) {
+            return ($a->postsRead >= $b->postsRead);});
+    }
+    //Posts Read Descending
+    elseif(($_GET['sort'] == "pr") AND ($_GET['asc']) == "false"){
+        usort($students, function ($a, $b) {
+            return ($a->postsRead <= $b->postsRead);});
+    }
+    //Last Access Ascending
+    elseif(($_GET['sort'] == "la") AND ($_GET['asc']) == "true"){
+        usort($students, function ($a, $b) {
+            return ($a->lastAccess >= $b->lastAccess);});
+    }
+    //Last Access Descending
+    elseif(($_GET['sort'] == "la") AND ($_GET['asc']) == "false"){
+        usort($students, function ($a, $b) {
+            return ($a->lastAccess <= $b->lastAccess);});
+    }
+}
+
+
+$urlBookmarking = new moodle_url($CFG->wwwroot."/local/analytics/");
 
 ?>
-
+    <!-- Heading View -->
+    <div style="position: fixed;top: 70px; left:125px; font-family: Arial; z-index: 4">
+        <h2>Students</h2>
+    </div>
 
     <!-- Search Bars -->
 
@@ -375,17 +492,127 @@ foreach($studentSearch as $user){
         </div>
     </div>
 
+
+
+
+<?php
+$urlSort = new moodle_url($CFG->wwwroot."/local/analytics/students_overview.php?courseid=".$course_id);
+?>
     <div>
-        <div style="overflow-y: scroll; width:60%; height:75%; top:25%; right: 20% ;position: absolute ">
+        <div style="overflow-y: scroll; width:70%; height:75%; top:25%; right: 15% ;position: absolute ">
 
             <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-                <div style="width:15%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Student Name</span> </div>
-                <div style="width:15%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Quiz Grade Ø</span> </div>
-                <div style="width:15%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Assignment Grade Ø</span> </div>
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Material Viewed</span> </div>
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Forum Read </span> </div>
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Last Access</span> </div>
+                <div style="width:60px;word-wrap:break-word;"class="blueColor"></div>
+                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Student <br> Name</span>
+
+                    <!-- Order by Name -->
+                    <div>
+
+                    <a href="<?php echo $urlSort."&sort=name&asc=true"?>">
+                        <div>
+                            <img src="./icons/arrow_up.png" width="20px" height="20px">
+                        </div>
+                    </a>
+
+                    <a href="<?php echo $urlSort."&sort=name&asc=false"?>">
+                        <div>
+                            <img src="./icons/arrow_down.png" width="20px" height="20px">
+                        </div>
+                    </a>
+                    </div>
+                </div>
+                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Quizzes <br> Taken</span>
+
+                    <!-- Order by Name -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=qt&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=qt&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Assignments <br> Taken</span>
+
+                    <!-- Order by Name -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=at&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=at&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Material <br> Viewed</span>
+
+                    <!-- Order by Name -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=mv&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=mv&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Posts <br> Read/Created</span>
+
+                    <!-- Order by Name -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=pr&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=pr&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                <div style="width:10%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Last <br> Access</span>
+
+                    <!-- Order by Name -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=la&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=la&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
             </div>
+
 
             <br>
             <hr>
@@ -395,7 +622,7 @@ foreach($studentSearch as $user){
 
             <?php
                 $analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/student_analytics.php");
-                $url = $analytics_url . "?course=". $course_name;
+                $url = $analytics_url . "?courseid=". $course_id;
                 foreach($students as $student) {
                     if (!(($setFilter == 1) AND !version_compare($student->avgQGrade, $filterNumber,$filter))){
 
@@ -405,33 +632,45 @@ foreach($studentSearch as $user){
             ?>
 
 
-                <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
 
+                <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
+                    <div style="width:60px;word-wrap:break-word; text-align: right;">
+                        <a href="<?php echo $urlBookmarking."students_overview.php?courseid=".$course_id."&tag=true&uid=".$student->id ?>">
+                            <div class="tooltip">
+                                <img src="./icons/Pin.png" width="24px" height="24px">
+                                <span class="tooltiptext">Bookmark Student</span>
+                            </div>
+                        </a>
+                    </div>
                     <div style="width:15%;word-wrap:break-word;">
 
                         <a href="<?php echo $url ?>&userid=<?php echo $student->id ?>">
-                            <?php echo ($student->firstname)." ". ($student->lastname)  ?>
+                            <?php echo ($student->lastname).", ". ($student->firstname)  ?>
                         </a>
                     </div>
 
                     <div style="width:15%;word-wrap:break-word;">
-                        <?php echo round($student->avgQGrade,2) ?>
+                        <?php echo round($student->quizzesTaken,2) ?>
                     </div>
 
                     <div style="width:15%;word-wrap:break-word;">
-                        <?php echo round($student->avgAGrade,2) ?>
+                        <?php echo round($student->assignmentsTaken,2) ?>
                     </div>
 
-                    <div style="width:10%;word-wrap:break-word;">
+                    <div style="width:15%;word-wrap:break-word;">
                         <?php echo round($student->materialViewed,2)."%" ?>
                     </div>
 
-                    <div style="width:10%;word-wrap:break-word;">
-                        <?php echo round($student->forumRead,2)."%"?>
+                    <div style="width:15%;word-wrap:break-word;">
+                        <?php echo round($student->postsRead,2)."% / ".$student->postsCreated?>
                     </div>
 
                     <div style="width:10%;word-wrap:break-word;">
-                        <?php echo date('d/m/Y H:i:s', $student->lastAccess) ?>
+                        <?php if (is_null($student->lastAccess)){
+                            echo "-";
+                        }else {
+                            echo date('d/m/Y H:i:s', $student->lastAccess);
+                        }?>
                     </div>
                 </div>
                 <br>
@@ -444,6 +683,3 @@ foreach($studentSearch as $user){
 
     </body>
 <?php
-
-$courseviewurl = new moodle_url('/course/view.php', ['id' => $courseId]);
-echo '<a href="' . $courseviewurl . '">Back to the course</a>';

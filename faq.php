@@ -20,7 +20,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__. "/graph-php-main/graph-php.class.php");
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
@@ -31,7 +30,7 @@ $PAGE->set_url(new moodle_url("/local/analytics/faq.php"));
 
 <!-- Layout -->
 <head>
-    <title>Home</title>
+    <title>FAQ</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         span.blueColor {
@@ -62,32 +61,19 @@ $PAGE->set_url(new moodle_url("/local/analytics/faq.php"));
 </head>
 
 
-    <?php
+<?php
+global $DB;
+global $CFG;
 
-    //Read Course ID, Startdate, Enddate (Use "Course Search" input)
-    global $DB;
-    $course_name = required_param("course", PARAM_TEXT);
-    $sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-    $records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
 
-    $startDate = null;
-    $startDateEpoch = null;
-    $endDateEpoch = null;
-    $courseId = null;
-    if (count($records) > 0) {
-        foreach ($records as $course) {
-            $courseId = $course->id;
-            $course_name = $course->fullname;
-            $startDateEpoch = $course->startdate;
-            $endDateEpoch = $course->enddate;
-            $startDate = date('d/m/Y', $course->startdate);
-        }
-    }
-    else {
-        //Error "Course not found"
-        echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-        return(null);
-    }
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
 
 ?>
 

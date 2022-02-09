@@ -20,7 +20,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__. "/graph-php-main/graph-php.class.php");
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
@@ -41,7 +40,7 @@ function getNote($noteid) {
 
     <!-- Layout -->
     <head>
-        <title>Home</title>
+        <title>Notes</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
             span.blueColor {
@@ -75,7 +74,7 @@ function getNote($noteid) {
                 border-radius: 15px;
             }
             .button {
-                background-color: #007FFF;
+                background-color: #54a9ff;
                 border: none;
                 color: white;
                 font-family: Arial;
@@ -84,6 +83,10 @@ function getNote($noteid) {
                 text-align: center;
                 font-size: 16px;
                 border-radius: 15px;
+            }
+            .button:hover {
+                transition: all .2s ease-in-out;
+                background-color: #007FFF;
             }
 
             <!-- "flexboxes" -->
@@ -147,29 +150,17 @@ function getNote($noteid) {
 
 <?php
 global $DB;
-//Read Course ID, Startdate, Enddate (Use "Course Search" input)
-$course_name = required_param("course", PARAM_TEXT);
-$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+global $CFG;
 
-$startDate = null;
-$startDateEpoch = null;
-$endDateEpoch = null;
-$courseId = null;
-if (count($records) > 0) {
-    foreach ($records as $course) {
-        $courseId = $course->id;
-        $course_name = $course->fullname;
-        $startDateEpoch = $course->startdate;
-        $endDateEpoch = $course->enddate;
-        $startDate = date('d/m/Y', $course->startdate);
-    }
-}
-else {
-    //Error "Course not found"
-    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-    return(null);
-}
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
+
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
 
 //Read Number of enrolled Students in Course
 // SQL Source: https://moodle.org/mod/forum/discuss.php?d=118532#p968575 with slight modifications
@@ -192,7 +183,7 @@ $userIDString = join("','",$userIDs);
 
 //Needed in Notes HTML
 $analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/notes.php");
-$url = $analytics_url . "?course=". $course_name;
+$url = $analytics_url . "?courseid=". $course_id;
 
 $noteToEdit = null;
 if (isset($_GET['noteid'])) {
@@ -206,7 +197,6 @@ if (isset($_POST['sname'])){
     $sql ="SELECT *
            FROM {local_analytics_notes}
            WHERE courseid = ? AND (name LIKE ? )";
-    echo "Hi";
     $notes = $DB->get_records_sql($sql,[$courseId, $_POST["sname"]."%"]);}
 
 elseif (isset($_POST['scontext'])){
@@ -233,7 +223,7 @@ if (isset($_POST["action"]) AND ($_POST['noteid'] != 0)   AND $_POST["action"] =
 
     $DB->update_record("local_analytics_notes", $record, $bulk=false);
 
-    header("Refresh:0; $url");
+    redirect($url);
 }
 //Create Note
 elseif (isset($_POST["action"]) AND $_POST["action"] == "create" ){
@@ -245,20 +235,145 @@ elseif (isset($_POST["action"]) AND $_POST["action"] == "create" ){
     $record->context = $_POST["context"];
     $DB->insert_record("local_analytics_notes", $record);
 
-    header("Refresh:0; $url");
+    redirect($url);
+
 }
 
 //Delete Note
 elseif (isset($_POST["action"]) AND $_POST["action"] == "delete" ){
     $DB->delete_records_select("local_analytics_notes", 'id= ?',[$_POST["noteid"]]);
 
-    header("Refresh:0; $url");
+    redirect($url);
 }
 
+//Notes Order by
+if (isset($_GET['sort']) AND (isset($_GET['asc']))) {
+    //Context Ascending
+    if (($_GET['sort'] == "context") AND ($_GET['asc']) == "true") {
+        usort($notes, function($a, $b) {return strcmp($a->context, $b->context);});
+    }
+    //Context Descending
+    elseif(($_GET['sort'] == "context") AND ($_GET['asc']) == "false"){
+        usort($notes, function ($a, $b) {
+            return strcmp($a->context, $b->context);});
+        $notes = array_reverse($notes);
+    }
+    //Name Ascending
+    elseif(($_GET['sort'] == "name") AND ($_GET['asc']) == "true"){
+        usort($notes, function($a, $b) {
+            return strcmp($a->name, $b->name);});
+    }
+    //Name Descending
+    elseif(($_GET['sort'] == "name") AND ($_GET['asc']) == "false"){
+        usort($notes, function($a, $b) {
+            return strcmp($a->name, $b->name);});
+    $notes = array_reverse($notes);
+    }
+    //Date Ascending
+    elseif(($_GET['sort'] == "date") AND ($_GET['asc']) == "true"){
+        usort($notes, function ($a, $b) {
+            return ($a->date >= $b->date);});
+    }
+    //Date Descending
+    elseif(($_GET['sort'] == "date") AND ($_GET['asc']) == "false"){
+        usort($notes, function ($a, $b) {
+            return ($a->date <= $b->date);});
+    }
+}
 
+//Get most popular Tags/Context
+$sql ="SELECT  context, count(*) AS amount
+           FROM {local_analytics_notes}
+           WHERE courseid = ?
+           GROUP BY context
+           ORDER BY count(*) DESC
+           LIMIT 5";
+$tags = $DB->get_records_sql($sql,[$courseId]);
+
+//Get Students with most notes
+$sql ="SELECT  name, count(*) AS amount
+           FROM {local_analytics_notes}
+           WHERE courseid = ?
+           GROUP BY name
+           ORDER BY count(*) DESC
+           LIMIT 5";
+$studentsP = $DB->get_records_sql($sql,[$courseId]);
+$colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
 ?>
-    <!-- Search Bars -->
+    <!-- Popular Tags -->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+        google.charts.load('current', {'packages':['bar']});
+        google.charts.setOnLoadCallback(drawStuff);
 
+        function drawStuff() {
+            var data = google.visualization.arrayToDataTable([
+                ['Tag', 'Notes'],
+                <?php
+                foreach($tags as $resource){
+                    echo "['".$resource->context."',".round($resource->amount,2)."],";
+                }
+                ?>
+            ]);
+
+            var options = {
+                title: 'Popular Tags',
+                legend: { position: 'none' },
+                chart: { title: 'Popular Tags',
+                    subtitle: ' ' },
+                bars: 'horizontal', // Required for Material Bar Charts.
+                hAxis: {
+                    viewWindow:{
+                        max:100,
+                    }
+                }
+            };
+
+            var chart = new google.charts.Bar(document.getElementById('chart_popular_tags'));
+            chart.draw(data, options);
+        };
+    </script>
+
+    <!-- Students with most Notes -->
+
+    <script type="text/javascript">
+        google.charts.load('current', {'packages':['bar']});
+        google.charts.setOnLoadCallback(drawStufff);
+
+        function drawStufff() {
+            var data = google.visualization.arrayToDataTable([
+                ['Name', 'Notes', {role: 'style'}],
+                <?php  //.$colors[$key]
+                foreach($studentsP as $key => $student){
+                    echo "['".$student->name."',".round($student->amount,2).",'red'],";
+                }
+                ?>
+            ]);
+
+            var options = {
+                title: 'Students with most Notes',
+                legend: { position: 'none' },
+                chart: { title: 'Students',
+                    subtitle: ' ' },
+                bars: 'horizontal', // Required for Material Bar Charts.
+                hAxis: {
+                    viewWindow:{
+                        max:100,
+                    }
+                }
+            };
+
+            var chart = new google.charts.Bar(document.getElementById('chart_popular_students'));
+            chart.draw(data, options);
+        };
+    </script>
+
+    <!-- Heading View -->
+    <div style="position: fixed;top: 70px; left:125px; font-family: Arial; z-index: 4">
+        <h2>Notes</h2>
+    </div>
+
+    <!-- Search Bars -->
     <div style="top: 9%; right: 25%; position: absolute; height: 7%; width: 50%; background-color:#3B3C3B ">
         <div style="font-family:Arial;  display: flex;  justify-content:space-around; align-items: center">
             <!-- Search by Name -->
@@ -272,7 +387,7 @@ elseif (isset($_POST["action"]) AND $_POST["action"] == "delete" ){
             <!-- Search by Context -->
             <div>
                 <form class="example" action="<?php echo $url ?>" method="post" style="max-width:300px">
-                    <input type="text" placeholder="Search By Context" name="scontext">
+                    <input type="text" placeholder="Search By Tag" name="scontext">
                     <button>&#128269; </button>
                 </form>
             </div>
@@ -294,15 +409,22 @@ elseif (isset($_POST["action"]) AND $_POST["action"] == "delete" ){
                 <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
                     <input type="hidden" name="action" value="create">
                     <input type="hidden" name="noteid" value="<?php if (isset($_GET['noteid']))  {echo $noteToEdit->id;} else echo 0;?>">
-                    <div><input type="text" name="context" placeholder="Note Context"
+                    <div><input type="text" list="predefinedtags" name="context" placeholder="Note Tag" class="inputfield" style="width:180px"
                            value="<?php if (isset($_GET['noteid']))  {echo $noteToEdit->context;} ?>">
+                        <datalist id="predefinedtags">
+                            <option value="Activity">
+                            <option value="General">
+                            <option value="Grade">
+                            <option value="Performance">
+
+                        </datalist>
                     </div>
                     <div>
-                    <input type="text" name="name" placeholder="Student Name"
+                    <input type="text" name="name" placeholder="Student Name" class="inputfield" style="width:180px"
                            value="<?php if (isset($_GET['noteid']))  {echo $noteToEdit->name;} ?>">
                     </div>
                     <div>
-                    <textarea name="notetext" cols="30" rows="4"
+                    <textarea name="notetext" cols="30" rows="4" class="inputfield" style="width:300px; height: 62px"
                               placeholder="Note Text"><?php if (isset($_GET['noteid']))  {echo $noteToEdit->notetext;} ?></textarea>
                     </div>
                     <div>
@@ -319,13 +441,64 @@ elseif (isset($_POST["action"]) AND $_POST["action"] == "delete" ){
             </form>
         </div>
 
-        <div style="overflow-y: scroll; width:60%; height:60%; top:40%; right: 20% ;position: absolute ">
+        <?php
+        $urlSort = new moodle_url($CFG->wwwroot."/local/analytics/notes.php?courseid=".$course_id);
+        ?>
+        <div style="overflow-y: scroll; width:60%; height:40%; top:40%; right: 20% ;position: absolute ">
 
             <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Context</span> </div>
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Student Name</span> </div>
+                <div style="width:10%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Tag</span>
+                    <!-- Order by Context -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=context&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=context&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                <div style="width:10%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Student <br> Name</span>
+                    <!-- Order by Student Name -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=name&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=name&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
                 <div style="width:25%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Text</span> </div>
-                <div style="width:10%;"><span class="blueColor">Date</span>  </div>
+                <div style="width:10%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Date</span>
+                    <!-- Order by Date -->
+                    <div>
+
+                        <a href="<?php echo $urlSort."&sort=date&asc=true"?>">
+                            <div>
+                                <img src="./icons/arrow_up.png" width="20px" height="20px">
+                            </div>
+                        </a>
+
+                        <a href="<?php echo $urlSort."&sort=date&asc=false"?>">
+                            <div>
+                                <img src="./icons/arrow_down.png" width="20px" height="20px">
+                            </div>
+                        </a>
+                    </div>
+                </div>
                 <div style="width:5%;"> <span class="blueColor">Delete</span> </div>
                 <div style="width:5%;"> <span class="blueColor"><b>Edit</b></span> </div>
             </div>
@@ -378,7 +551,19 @@ elseif (isset($_POST["action"]) AND $_POST["action"] == "delete" ){
                 <br>
              <?php } ?>
         </div>
+        <div style=" top:90%; position: absolute; right:15%;display: flex; width:70%; justify-content:space-evenly;">
+
+
+            <div style=" width:40%;height:400px;  ">
+                <!-- Resources Viewed -->
+                <div id="chart_popular_tags" style="height:300px;width: 500px"></div>
+            </div>
+            <div style=" width:40%;height:400px  ">
+                <!-- Resources Viewed -->
+                <div id="chart_popular_students" style="height:300px;width: 500px"></div>
+            </div>
+        </div>
     </div>
-    </body>
+</body>
 <?php
 

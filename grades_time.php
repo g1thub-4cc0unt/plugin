@@ -20,7 +20,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__. "/graph-php-main/graph-php.class.php");
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
@@ -30,7 +29,7 @@ $PAGE->set_url(new moodle_url("/local/analytics/grades_time.php"));
 
     <!-- Layout -->
     <head>
-        <title>Home</title>
+        <title>Performance</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
             span.blueColor {
@@ -57,36 +56,28 @@ $PAGE->set_url(new moodle_url("/local/analytics/grades_time.php"));
                 left:15px;
                 border-radius: 15px;
             }
+            .box{
+                height: 100px;
+                width: 170px;
+                padding: 10px 5px;
+            }
         </style>
     </head>
 
 
 <?php
-
-//Read Course ID, Startdate, Enddate (Use "Course Search" input)
 global $DB;
-$course_name = required_param("course", PARAM_TEXT);
-$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+global $CFG;
 
-$startDate = null;
-$startDateEpoch = null;
-$endDateEpoch = null;
-$courseId = null;
-if (count($records) > 0) {
-    foreach ($records as $course) {
-        $courseId = $course->id;
-        $course_name = $course->fullname;
-        $startDateEpoch = $course->startdate;
-        $endDateEpoch = $course->enddate;
-        $startDate = date('d/m/Y', $course->startdate);
-    }
-}
-else {
-    //Error "Course not found"
-    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-    return(null);
-}
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
+
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
 
 //Read Number of enrolled Students in Course
 // SQL Source: https://moodle.org/mod/forum/discuss.php?d=118532#p968575 with slight modifications
@@ -134,76 +125,82 @@ $sql = "SELECT g.userid
 $amountUsersTakenQuiz = $DB->get_records_sql($sql, [$courseId, time(), time()]);
 
 
-//Average Quiz Grade
-$courseDurationWeeks = ($endDateEpoch - $startDateEpoch)/604800;
-//[[from, to, AverageGrade, AverageTime]]
-$weeks = array();
-for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
-    $weeks[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),0,0);
+//Course Duration Weeks
+if ($endDateEpoch > time()) {
+    $courseDurationWeeks = (time() - $startDateEpoch) / 604800;
+}else{
+    $courseDurationWeeks = ($endDateEpoch - $startDateEpoch)/604800;
 }
 
-$xAxisDatesQuiz = array();
-$yAxisGradesQuiz = array();
-$maxQuizGrade = null;
-foreach ($weeks as $key => $week) {
-    $sql = "SELECT  g.userid,g.grade, q.grade AS maxgrade
-        FROM {quiz} q
-        JOIN {quiz_grades} g ON q.id = g.quiz
-        WHERE q.course = ? AND g.userid in ('$userIDString') AND q.timeopen >= ? AND q.timeopen < ?";
+//Read Normalization Value/Max Quiz Grade
+$normalizationValueQ = 10;
+if (isset($_POST['quizMaxGrade'])) {
+    $normalizationValueQ = $_POST['quizMaxGrade'];
 
-    $quizGrades = $DB->get_records_sql($sql, [$courseId, $week[0], $week[1]]);
-    $xAxisDatesQuiz[] = date("m.d.Y", $week[0]);
-    $sum = 0;
-    if (count($quizGrades) > 0) {
-        foreach ($quizGrades as $grade) {
-            $sum += $grade->grade;
-            $maxQuizGrade = $grade -> maxgrade;
-        }
-        $avgGrade = ($sum / count($quizGrades));
-        $weeks[$key][2] = $avgGrade;
-        $yAxisGradesQuiz[] = $avgGrade;
-        //echo date("m/d/Y H:i:s", $week[0]) . "  " . $week[0] . " " . date("m/d/Y H:i:s", $week[1]) . "  " . $week[1] . " Average Grade: " . ($avgGrade) . "<br>";
-    } else {
-        $yAxisGradesQuiz[] = null;
+    $record = new stdClass();
+    $record->courseid = $course_id;
+    $record->name = "quizMaxGrade";
+    $record->setting = $_POST['quizMaxGrade'];
+    $DB->delete_records_select("local_analytics_settings", 'courseid= ? AND name = ?', [$courseId, "quizMaxGrade"]);
+    $DB->insert_record("local_analytics_settings", $record);
+}else{
+    $sql ="SELECT *
+           FROM {local_analytics_settings}
+           WHERE courseid = ? AND name = ?";
+    $day = $DB->get_record_sql($sql,[$courseId, "quizMaxGrade"]);
+    if (!is_null($day->setting)){
+        $normalizationValueQ = $day->setting;
     }
 }
 
-//Graph Average Quiz Grade
-    $graphQ = new graph();
-    $graphQ->plot( range(1,ceil($courseDurationWeeks)), $yAxisGradesQuiz, 'o');
-    $graphQ->xlabel( 'Week' );
-    $graphQ->axes([1,ceil($courseDurationWeeks),0,$maxQuizGrade]);
-    $graphQ->legend( $legend = false );
-    $graphQ->title("Average Quiz Grade");
+//Average Quiz Grade
+//[[from, to, AverageGrade, AverageTime, Date, StdGrade, StdTime]]
+$quizGradesO = array();
+for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
+    $quizGradesO[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),0,0,0,0,0);
+}
+
+$maxQuizGrade = null;
+foreach ($quizGradesO as $key => $week) {
+    $sql = "SELECT  avg(g.grade) AS avggrade, std(g.grade) as standardgrade, q.grade AS maxgrade
+        FROM mdl_quiz q
+        JOIN mdl_quiz_grades g ON q.id = g.quiz
+        WHERE q.course = ? AND g.userid in ('$userIDString') AND q.timeopen >= ? AND q.timeopen < ?";
+
+    $quizGrades = $DB->get_record_sql($sql, [$courseId, $week[0], $week[1]]);
+    $quizGradesO[$key][4] = date("d.m.Y", $week[0]);
+    $sum = 0;
+    if (!is_null($quizGrades->maxgrade)) {
+        $maxQuizGrade = $quizGrades->maxgrade;
+        $avgGrade = $quizGrades -> avggrade;
+        $avgGrade = normalize($avgGrade, 0, $maxQuizGrade);
+        $quizGradesO[$key][2] = $avgGrade*$normalizationValueQ;
+
+        $stdGrade =  $quizGrades -> standardgrade;
+        $stdGrade = normalize($stdGrade, 0, $maxQuizGrade);
+        $quizGradesO[$key][5] = $stdGrade*$normalizationValueQ;
+
+        //echo date("m/d/Y H:i:s", $week[0]) . "  " . $week[0] . " " . date("m/d/Y H:i:s", $week[1]) . "  " . $week[1] . " Average Grade: " . ($avgGrade) . "<br>";
+    }
+}
 
 //Average Time Quiz
-$yAxisAverageTimeQuiz = array();
-foreach ($weeks as $key => $week) {
-        $sql = "SELECT avg(a.timefinish - a.timestart) as avgtime
+foreach ($quizGradesO as $key => $week) {
+        $sql = "SELECT avg(a.timefinish - a.timestart) as avgtime, std(a.timefinish - a.timestart) as stdtime
         FROM mdl_quiz q
         JOIN mdl_quiz_attempts a ON q.id = a.quiz
-        WHERE q.course = ? AND q.timeopen >=  ? AND q.timeopen <  ? AND a.userid IN ('$userIDString')";
+        WHERE q.course = ? AND a.state = 'finished ' AND q.timeopen >=  ? AND q.timeopen <  ? AND a.userid IN ('$userIDString')";
 
         $quizAvgTimes = $DB->get_records_sql($sql,[$courseId, $week[0], $week[1]]);
         if(count($quizAvgTimes)>0) {
             foreach ($quizAvgTimes as $quizAvgTime) {
-                $yAxisAverageTimeQuiz[] = ($quizAvgTime->avgtime)/60;
                 //echo is_null($quizAvgTime->avgTime)."<br>";
-                $weeks[$key][3] = ($quizAvgTime->avgtime)/60;
+                $quizGradesO[$key][3] = ($quizAvgTime->avgtime)/60;
+                $quizGradesO[$key][6] = ($quizAvgTime->stdtime)/60;
             }
-        }
-        else{
-            $yAxisAverageTimeQuiz[] = 0;
         }
 }
 
-//Graph Average Time Quiz
-$graphQT = new graph();
-$graphQT->plot( range(1,ceil($courseDurationWeeks)), $yAxisAverageTimeQuiz, 'o');
-$graphQT->xlabel( 'Week' );
-$graphQT->axes([1,ceil($courseDurationWeeks),0,max($yAxisAverageTimeQuiz)]);
-$graphQT->legend( $legend = false );
-$graphQT->title("Average Time Needed - Minutes");
 
 
 //Current Assignment Participation
@@ -236,20 +233,40 @@ if (count($amountAssignments) > 0 ){
     $averageAssignmentParticipation = (($amountUTAs/(count($userIDs)*count($amountAssignments)))*100);
 }
 
+//Read Normalization Value/Max Assignment Grade
+$normalizationValueA = 100;
+if (isset($_POST['assignmentMaxGrade'])) {
+    $normalizationValueA = $_POST['assignmentMaxGrade'];
 
-//Average Assignment Grades
-//[[from, to, AverageGrade, Average Time until Deadline]]
-$weeksA = array();
-for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
-    $weeksA[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),0,0);
+    $record = new stdClass();
+    $record->courseid = $course_id;
+    $record->name = "assignmentMaxGrade";
+    $record->setting = $_POST['assignmentMaxGrade'];
+    $DB->delete_records_select("local_analytics_settings", 'courseid= ? AND name = ?', [$courseId, "assignmentMaxGrade"]);
+    $DB->insert_record("local_analytics_settings", $record);
+}else{
+    $sql ="SELECT *
+           FROM {local_analytics_settings}
+           WHERE courseid = ? AND name = ?";
+    $day = $DB->get_record_sql($sql,[$courseId, "assignmentMaxGrade"]);
+    if (!is_null($day->setting)){
+        $normalizationValueA = $day->setting;
+    }
 }
 
-$xAxisDatesAssignment = array();
-$yAxisGradesAssignment = array();
+
+//Average Assignment Grades
+//[[from, to, AverageGrade, Average Time until Deadline, date, stdgrade, stdtime]]
+$assignmentGradesO = array();
+for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
+    $assignmentGradesO[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),0,0,0,0,0);
+}
+
+
 $maxAssignmentGrade = null;
-foreach ($weeksA as $key => $week) {
+foreach ($assignmentGradesO as $key => $week) {
     //Read Avg Grades
-    $sql = "SELECT avg(g.grade) AS avggrade
+    $sql = "SELECT avg(g.grade) AS avggrade, std(g.grade) AS stdgrade
     FROM {assign} a
     JOIN {assign_grades} g ON a.id = g.assignment
     WHERE a.course = ?  AND g.userid in ('$userIDString')
@@ -264,30 +281,26 @@ foreach ($weeksA as $key => $week) {
     AND a.allowsubmissionsfromdate >= ? AND a.allowsubmissionsfromdate < ?";
     $assignmentMaxGrade = $DB->get_records_sql($sql1, [$courseId, $week[0], $week[1]]);
     foreach ($assignmentMaxGrade as $maxGrade){
+
         $maxAssignmentGrade = $maxGrade -> grade;
+        $avgGradeA = $assignmentGradesAvg ->avggrade;
+        $avgGradeA = normalize($avgGradeA, 0, $maxAssignmentGrade);
+        $assignmentGradesO[$key][2] = $avgGradeA*$normalizationValueA;
+
+        $stdGradeA = $assignmentGradesAvg ->stdgrade;
+        $stdGradeA = normalize($stdGradeA, 0, $maxAssignmentGrade);
+        $assignmentGradesO[$key][5] = $stdGradeA*$normalizationValueA;
     }
 
-    $yAxisGradesAssignment[] = $assignmentGradesAvg ->avggrade;
-    $weeksA[$key][2] = $assignmentGradesAvg ->avggrade;
-
-
-
-    $xAxisDatesAssignment[] = date("m.d.Y", $week[0]);
+    $assignmentGradesO[$key][4] = date("d.m.Y", $week[0]);
 
 }
-//Graph Average Assignment Grade
-$graphA = new graph();
-$graphA->plot( range(1,ceil($courseDurationWeeks)), $yAxisGradesAssignment, 'o');
-$graphA->xlabel( 'Week' );
-$graphA->axes([1,ceil($courseDurationWeeks),0,$maxAssignmentGrade]);
-$graphA->legend( $legend = false );
-$graphA->title("Average Assignment Grade");
+
 
 //Average Assignment Time until deadline
-$yAxisAverageTimeAssignment = array();
 //Read Average Time
-foreach ($weeksA as $key => $week) {
-    $sql = "SELECT avg(a.cutoffdate - s.timecreated) AS avgtime
+foreach ($assignmentGradesO as $key => $week) {
+    $sql = "SELECT avg(a.cutoffdate - s.timecreated) AS avgtime, std(a.cutoffdate - s.timecreated) AS stdtime
         FROM {assign} a
         JOIN {assign_submission} s ON a.id = s.assignment
         WHERE a.course = ?  AND s.userid in ('$userIDString')
@@ -297,64 +310,243 @@ foreach ($weeksA as $key => $week) {
     $avgTimeUntilDeadline = $DB->get_records_sql($sql, [$courseId, $week[0], $week[1]]);
     if (count($avgTimeUntilDeadline) > 0) {
         foreach ($avgTimeUntilDeadline as $ttl) {
-            $weeksA[$key][3] = ($ttl->avgtime)/3600;
-            $yAxisAverageTimeAssignment[] = ($ttl->avgtime)/3600;
-            echo "<br><br><br>".($ttl->avgtime)/3600;
+            $assignmentGradesO[$key][3] = ($ttl->avgtime)/3600;
+            $assignmentGradesO[$key][6] = ($ttl->stdtime)/3600;
+            //echo "<br><br><br>".($ttl->avgtime)/3600;
         }
-    }
-    else{
-        $yAxisAverageTimeAssignment[] = 0;
     }
 }
 
-//Graph Average Assignment Grade
-$graphAT = new graph();
-$graphAT->plot( range(1,ceil($courseDurationWeeks)), $yAxisAverageTimeAssignment, 'o');
-$graphAT->xlabel( 'Week' );
-$graphAT->axes([1,ceil($courseDurationWeeks),0,max($yAxisAverageTimeAssignment)]);
-$graphAT->legend( $legend = false );
-$graphAT->title("Average Time until Deadline - Hours");
 ?>
+    <!--Average Quiz Grade-->
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+
+        // Load the Visualization API and the corechart package.
+        google.charts.load('current', {packages: ['corechart', 'bar']});
+
+        // Set a callback to run when the Google Visualization API is loaded.
+        google.charts.setOnLoadCallback(drawChart);
+
+        // Callback that creates and populates a data table,
+        // instantiates the pie chart, passes in the data and
+        // draws it.
+        function drawChart() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Average Grade', 'Standard Deviation'],
+                <?php
+                foreach ($quizGradesO as $key => $entry ){
+                    echo "['".$quizGradesO[$key][4]."',".$quizGradesO[$key][2].",".$quizGradesO[$key][5]."],";
+                }
+                ?>
+            ]);
+
+            // Set chart options
+            var options = {
+                title:'Average Quiz Grades',
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Average Grade',
+                    viewWindow:{
+                        max:<?php echo $normalizationValueQ ?>,
+                    }
+                }
+            };
+
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.visualization.ColumnChart(document.getElementById('chart_average_quiz_grades'));
+            chart.draw(data, options);
+        }
+    </script>
+
+
+    <!--Average Quiz Time-->
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+
+        // Load the Visualization API and the corechart package.
+        google.charts.load('current', {packages: ['corechart', 'bar']});
+
+        // Set a callback to run when the Google Visualization API is loaded.
+        google.charts.setOnLoadCallback(drawChart);
+
+        // Callback that creates and populates a data table,
+        // instantiates the pie chart, passes in the data and
+        // draws it.
+        function drawChart() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Average Time Needed', 'Standard Deviation'],
+                <?php
+                foreach ($quizGradesO as $key => $entry ){
+                    echo "['".$quizGradesO[$key][4]."',".$quizGradesO[$key][3].",".$quizGradesO[$key][6]."],";
+                }
+                ?>
+            ]);
+
+            // Set chart options
+            var options = {
+                title:'Average Quiz Time',
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Average Time (Minutes)',
+                }
+            };
+
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.visualization.ColumnChart(document.getElementById('chart_average_quiz_time'));
+            chart.draw(data, options);
+        }
+    </script>
+
+    <!--Average Assignment Grade-->
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+
+        // Load the Visualization API and the corechart package.
+        google.charts.load('current', {packages: ['corechart', 'bar']});
+
+        // Set a callback to run when the Google Visualization API is loaded.
+        google.charts.setOnLoadCallback(drawChart);
+
+        // Callback that creates and populates a data table,
+        // instantiates the pie chart, passes in the data and
+        // draws it.
+        function drawChart() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Average Grade', 'Standard Deviation'],
+                <?php
+                foreach ($assignmentGradesO as $key => $entry ){
+                    echo "['".$assignmentGradesO[$key][4]."',".$assignmentGradesO[$key][2].",".$assignmentGradesO[$key][5]."],";
+                }
+                ?>
+            ]);
+
+            // Set chart options
+            var options = {
+                title:'Average Assignment Grades',
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Average Grade',
+                    viewWindow:{
+                        max:<?php echo $normalizationValueA ?>,
+                    }
+                }
+            };
+
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.visualization.ColumnChart(document.getElementById('chart_average_assignment_grades'));
+            chart.draw(data, options);
+        }
+    </script>
+
+    <!--Average Assignment Time-->
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+
+        // Load the Visualization API and the corechart package.
+        google.charts.load('current', {packages: ['corechart', 'bar']});
+
+        // Set a callback to run when the Google Visualization API is loaded.
+        google.charts.setOnLoadCallback(drawChart);
+
+        // Callback that creates and populates a data table,
+        // instantiates the pie chart, passes in the data and
+        // draws it.
+        function drawChart() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Average Hours before Deadline', 'Standard Deviation'],
+                <?php
+                foreach ($assignmentGradesO as $key => $entry ){
+                    echo "['".$assignmentGradesO[$key][4]."',".$assignmentGradesO[$key][3].",".$assignmentGradesO[$key][6]."],";
+                }
+                ?>
+            ]);
+
+            // Set chart options
+            var options = {
+                title:'Average Submission before Deadline',
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Average Time (Hours)',
+                }
+            };
+
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.visualization.ColumnChart(document.getElementById('chart_average_assignment_time'));
+            chart.draw(data, options);
+        }
+    </script>
+
+
+    <!-- Heading View -->
+    <div style="position: fixed;top: 70px; left:125px; font-family: Arial; z-index: 4">
+        <h2>Performance</h2>
+    </div>
+
     <!-- General Information -->
 
-    <div style="top: 9%; right: 3%; position: absolute; height: 7%; width: 90%;  ">
-        <div style="font-family:Arial;  display: flex;  justify-content:space-around; align-items: center">
+    <div style="top: 140px; right: 15%; position: absolute; height: 7%; width: 70%;  ">
+        <div style="font-family:Arial;  display: flex;  justify-content:space-between; align-items: center">
 
             <!-- Current Quiz Participation -->
             <div style="background-color:white;
                 text-align: center;
-                padding: 1% 3%;
-                border-radius: 15px ">
+                border-radius: 15px"
+                class="box">
                 <p>
-                    <span class="blackColor"> Current Quiz Participation:</span> <br><br><span class ="blueColor"><?php echo count($amountUsersTakenQuiz)."/".count($userIDs) ?></span>
+                    <span class="blackColor"> Current Quiz Participation:</span> <br><br><span class ="blueColor"><?php echo count($amountUsersTakenQuiz)."/".count($userIDs)." Students" ?></span>
                 </p>
             </div>
 
             <!-- Average Quiz Participation -->
             <div style="background-color:white;
                 text-align: center;
-                padding: 1% 3%;
-                border-radius: 15px ">
+                border-radius: 15px "
+                 class="box">
                 <p>
-                    <span class="blackColor"> Average Quiz Participation:</span> <br><br><span class ="blueColor"><?php echo $averageQuizParticipation."%" ?></span>
+                    <span class="blackColor"> Average Quiz Participation:</span> <br><br><span class ="blueColor"><?php echo round($averageQuizParticipation,2)."%" ?></span>
                 </p>
             </div>
 
             <!-- Current Assignment Participation -->
             <div style="background-color:white;
                 text-align: center;
-                padding: 1% 3%;
-                border-radius: 15px ">
+                border-radius: 15px "
+                 class="box">
                 <p>
-                    <span class="blackColor"> Current Assignment Participation:</span> <br><br><span class ="blueColor"><?php echo count($amountUsersTakenAssignment)."/".count($userIDs) ?></span>
+                    <span class="blackColor"> Current Assignment Participation:</span> <br><br><span class ="blueColor"><?php echo count($amountUsersTakenAssignment)."/".count($userIDs)." Students" ?></span>
                 </p>
             </div>
 
             <!-- Average Assignment Participation -->
             <div style="background-color:white;
                 text-align: center;
-                padding: 1% 3%;
-                border-radius: 15px ">
+                border-radius: 15px "
+                 class="box">
                 <p>
                     <span class="blackColor"> Average Assignment Participation:</span> <br><br><span class ="blueColor"><?php echo round($averageAssignmentParticipation,2)."%" ?></span>
                 </p>
@@ -364,49 +556,53 @@ $graphAT->title("Average Time until Deadline - Hours");
     </div>
 
 
-    <div style="font-family:Arial;overflow-y: scroll;top:25%; right: 3% ;
-    position: absolute;width:90%; height:80%; top:20%;  display: flex; gap: 10px 40px; flex-wrap: wrap; justify-content:space-evenly;">
+    <div style="font-family:Arial; right: 15% ;
+    position: absolute;width:70%; height:50%; top:280px;  display: flex; flex-wrap: wrap; justify-content:space-between;">
 
 
         <!-- Average Quiz Grade -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graphQ->output_gd_png_base64( )?>">
+        <div style="height: 400px;width: 500px;">
+            <div id="chart_average_quiz_grades" style="height: 350px;width: 500px;"></div>
+            <!-- Set Max Quiz Grade -->
+            <div>
+                <form action="<?php echo $CFG->wwwroot.'/local/analytics/grades_time.php?courseid='.$course_id ?>" method="post">
+                    <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
+                        <div>
+                            <input class="inputfield" type="number" min="1" name="quizMaxGrade" placeholder="Set Max Quiz Grade"
+                                   style="font-family: Arial;width:180px; ">
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Average Assignment Grade -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graphA->output_gd_png_base64( )?>">
+        <div style="height: 400px;width: 500px;">
+            <div id="chart_average_assignment_grades" style="height: 350px;width: 500px;"></div>
+            <!-- Set Max Assignment Grade -->
+            <div>
+                <form action="<?php echo $CFG->wwwroot.'/local/analytics/grades_time.php?courseid='.$course_id ?>" method="post">
+                    <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
+                        <div>
+                            <input class="inputfield" type="number" min="1" name="assignmentMaxGrade" placeholder="Set Max Assignment Grade"
+                                   style="font-family: Arial;width:180px; ">
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Average Quiz Time -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graphQT->output_gd_png_base64( )?>">
+        <div style="height: 350px;width: 500px;">
+            <div id="chart_average_quiz_time" style="height: 350px;width: 500px;"></div>
         </div>
 
         <!-- Average Assignment Time -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graphAT->output_gd_png_base64( )?>">
+        <div style="height: 350px;width: 500px;">
+            <div id="chart_average_assignment_time" style="height: 350px;width: 500px;"></div>
         </div>
     </div>
 
 
     </body>
 <?php
-//Right Arrow
-$analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/material_usage.php");
-echo'<div style=" width:2.5%;
-                height:5%; position:absolute; top:95%; right:2%;">
-   
-    <a href="' . $analytics_url . "?course=". $course_name. '">
-        <img style="height: 100%; width: 100%; object-fit: contain" src="./icons/RightArrow.png" class = "center">
-    </a>
-</div>';
-//Left Arrow
-$analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/grades_time.php");
-echo'<div style=" width:2.5%;
-                height:5%; position:absolute; top:95%; right:4%;">
-   
-    <a href="' . $analytics_url . "?course=". $course_name. '">
-        <img style="height: 100%; width: 100%; object-fit: contain" src="./icons/LeftArrow.png" class = "center">
-    </a>
-</div>';

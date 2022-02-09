@@ -20,9 +20,9 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once(__DIR__. "/graph-php-main/graph-php.class.php");
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
+
 
 $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
 ?>
@@ -30,7 +30,7 @@ $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
 
 <!-- Layout -->
 <head>
-    <title>Home</title>
+    <title>Course Overview</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         span.blueColor {
@@ -63,31 +63,19 @@ $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
 
 
 <?php
-
-//Read Course ID, Startdate, Enddate (Use "Course Search" input)
 global $DB;
-$course_name = required_param("course", PARAM_TEXT);
-$sql = "SELECT c.* FROM {course} c WHERE upper(c.fullname) like upper(?)";
-$records = $DB->get_records_sql($sql, ['%'.$course_name.'%']);
+global $CFG;
 
-$startDate = null;
-$startDateEpoch = null;
-$endDateEpoch = null;
-$courseId = null;
-if (count($records) > 0){
-    foreach ($records as $course) {
-        $courseId = $course->id;
-        $course_name = $course->fullname;
-        $startDateEpoch = $course->startdate;
-        $endDateEpoch = $course->enddate;
-        $startDate = date('d/m/Y', $course->startdate);
-    }
-}
-else {
-    //Error "Course not found"
-    echo "<script>alert('There is no Course with the name: \"$course_name\"')</script>";
-    return(null);
-}
+//Read Course Information
+$course_id = required_param("courseid", PARAM_INT);
+$course = getCourseInfo($course_id);
+
+$startDate = $course -> startDate;
+$startDateEpoch = $course -> startDateEpoch;
+$endDateEpoch = $course -> endDateEpoch;
+$courseId = $course -> id;
+$course_name = $course -> name;
+
 
 //Read Number of enrolled Students in Course
 // SQL Source: https://moodle.org/mod/forum/discuss.php?d=118532#p968575 with slight modifications
@@ -107,15 +95,36 @@ foreach ($records as $user){
 }
 $userIDs = join("','",$userIDs);
 
-//Tagged Students ToDo
-$students = array_slice($records,0,10);
+
+
+$inactiveGT = 0;
+//Read Number of Days until a student is considered inactive
+if (isset($_POST['daysInactive'])) {
+    $inactiveGT = time() - (86400 * $_POST['daysInactive']);
+
+    $record = new stdClass();
+    $record->courseid = $course_id;
+    $record->name = "daysInactive";
+    $record->setting = $_POST['daysInactive'];
+    $DB->delete_records_select("local_analytics_settings", 'courseid= ? AND name = ?', [$courseId, "daysInactive"]);
+    $DB->insert_record("local_analytics_settings", $record);
+}else{
+        $sql ="SELECT *
+           FROM {local_analytics_settings}
+           WHERE courseid = ? AND name = ?";
+        $day = $DB->get_record_sql($sql,[$courseId, "daysInactive"]);
+        if (!is_null($day->setting)){
+            $inactiveGT = time() - (86400 * $day->setting);
+        }
+}
+
 
 //Number of inactive Students
 $sql ="SELECT DISTINCT l.userid
        FROM mdl_logstore_standard_log l 
        WHERE  l.courseid = ? AND l.timecreated > ? AND l.userid IN ('$userIDs')
        AND l.action ='viewed' AND l.target ='course'";
-$activeUsers = $DB->get_records_sql($sql, [$courseId, time()-604800]);
+$activeUsers = $DB->get_records_sql($sql, [$courseId, $inactiveGT]);
 
 $amountInactiveUsers = count($records)-count($activeUsers);
 
@@ -124,15 +133,13 @@ $amountInactiveUsers = count($records)-count($activeUsers);
 $dateNow = date("m/d/Y", time());
 $dateNowEpoch = date_create($dateNow)->format('U');
 
-//[[from, to, amount]]
+//[[from, to, amount, date]]
 $pastDaysActiveUsers = array();
 for ($i = 1; $i <= 7; $i++) {
-    $pastDaysActiveUsers[] = array($dateNowEpoch-(86400*(7-$i)),$dateNowEpoch-(86400*((7-1)-$i)),999);
+    $pastDaysActiveUsers[] = array($dateNowEpoch-(86400*(7-$i)),$dateNowEpoch-(86400*((7-1)-$i)),null,null);
     //echo date("m/d/Y H:i:s",$pastDaysActiveUsers[$i-1][0])." ".date("m/d/Y H:i:s",$pastDaysActiveUsers[$i-1][1])."<br> ";
 }
 
-$xAxisDates = array();
-$yAxisAmountStudents = array();
 foreach ($pastDaysActiveUsers as $key => $arr) {
     $sql = "SELECT DISTINCT userid
             FROM {logstore_standard_log}
@@ -140,49 +147,38 @@ foreach ($pastDaysActiveUsers as $key => $arr) {
             AND courseid=? AND userid IN ('$userIDs') 
             AND timecreated > ? AND timecreated < ?";
     $activeUsers = $DB->get_records_sql($sql, [$courseId, $arr[0], $arr[1]]);
-    $pastDaysActiveUsers[$key][3] = count($activeUsers);
-
-    $xAxisDates[] = date ("d.m.Y",$arr[0]);
-    $yAxisAmountStudents[] = count($activeUsers);
+    $pastDaysActiveUsers[$key][2] = count($activeUsers);
+    $pastDaysActiveUsers[$key][3] = date ("D d.m",$arr[0]);
 }
 
-$graph = new graph();
-$graph->bar( range(0,6), array_reverse($yAxisAmountStudents), ['label'=>'Active Students']);
-$graph->axes([0,6,0,max($yAxisAmountStudents)]);
-$graph->xlabel("Days before today");
-$graph->legend( $legend = true );
-$graph->title("Active Students past days");
 
 
 //New Topics and Posts per week 604800 = 1 week
 $dateNow = date("m/d/Y", time());
 $dateNowEpoch = date_create($dateNow)->format('U');
 
-$courseDurationWeeks = ($endDateEpoch - $startDateEpoch)/604800;
-
-//[[from, to, amountPosts, amountTopics]]
-$weeks = array();
+if ($endDateEpoch > time()) {
+    $courseDurationWeeks = (time() - $startDateEpoch) / 604800;
+}else{
+    $courseDurationWeeks = ($endDateEpoch - $startDateEpoch)/604800;
+}
+//[[from, to, amountPosts, amountTopics,date]]
+$postTopics = array();
 for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
-    $weeks[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),999,999);
+    $postTopics[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),null,null,null);
 
 }
 
-$xAxisDatesPosts = array();
-$yAxisAmountPosts = array();
-
-$xAxisDatesTopics = array();
-$yAxisAmountTopics = array();
-foreach ($weeks as $key => $week) {
+foreach ($postTopics as $key => $week) {
     //Read Amount of Posts per Week
     $sql = "SELECT p.* 
             FROM {forum_discussions} fd
             JOIN {forum_posts} p ON fd.id = p.discussion
             WHERE fd.course = ? AND p.created > ? AND p.created < ? AND p.subject LIKE 'Re:%' ";
     $aPosts = $DB->get_records_sql($sql, [$courseId, $week[0], $week[1]]);
-    $weeks[$key][2] = count($aPosts);
+    $postTopics[$key][2] = count($aPosts);
+    $postTopics[$key][4] = date("d.m.Y",$week[0]);
 
-    $xAxisDatesPosts[] = date("m.d.Y",$week[0]);
-    $yAxisAmountPosts[] = count($aPosts);
 
     //Read Amount of Topics per Week
     $sql = "SELECT p.*
@@ -190,40 +186,12 @@ foreach ($weeks as $key => $week) {
             JOIN {forum_posts} p ON fd.id = p.discussion
             WHERE fd.course = ? AND p.created > ? AND p.created < ? AND p.subject NOT LIKE 'Re:%' ";
     $aTopics = $DB->get_records_sql($sql, [$courseId, $week[0], $week[1]]);
-    $weeks[$key][3] = count($aTopics);
+    $postTopics[$key][3] = count($aTopics);
 
-    $xAxisDatesTopics[] = date("m.d.Y",$week[0]);
-    $yAxisAmountTopics[] = count($aTopics);
 
     //echo date("m/d/Y H:i:s",$week[0])." ".date("m/d/Y H:i:s",$week[1])." New Posts: ". count($aPosts)." New Topics: ".count($aTopics)."<br>";
 }
 
-/*
-$graphTP = new graph();
-$graphTP->bar( $xAxisDatesTopics, $yAxisAmountTopics, ['label'=>'New Topics']);
-$graphTP->bar( $xAxisDatesPosts, $yAxisAmountPosts, ['label'=>'New Posts']);
-$graphTP->xlabel( 'Week' );
-$graphTP->axes([1,$courseDurationWeeks,0,5]);
-$graphTP->legend( $legend = true );
-$graphTP->title("New Topics and Posts per week");
-*/
-
-//Graph Posts
-$graphP = new graph();
-$graphP->bar( range(1,ceil($courseDurationWeeks)), $yAxisAmountPosts, ['label'=>'New Posts']);
-$graphP->xlabel( 'Week' );
-$graphP->axes([1,ceil($courseDurationWeeks),0,max($yAxisAmountPosts)]);
-$graphP->legend( $legend = true );
-$graphP->title("New Posts per week");
-
-//Graph Topics
-
-$graphT = new graph();
-$graphT->bar(range(1,ceil($courseDurationWeeks)), $yAxisAmountTopics, ['label'=>'New Topics']);
-$graphT->xlabel( 'Week' );
-$graphT->axes([1,ceil($courseDurationWeeks),0,max($yAxisAmountTopics)]);
-$graphT->legend( $legend = true );
-$graphT->title("New Topics per week");
 
 //Last 3 Notes
 $sql ="SELECT *
@@ -243,48 +211,171 @@ $sql ="SELECT *
 $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
 
 ?>
+    <!--Active Students past days -->
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
 
+        // Load the Visualization API and the corechart package.
+        google.charts.load('current', {packages: ['corechart', 'bar']});
+
+        // Set a callback to run when the Google Visualization API is loaded.
+        google.charts.setOnLoadCallback(drawChart);
+
+        // Callback that creates and populates a data table,
+        // instantiates the pie chart, passes in the data and
+        // draws it.
+        function drawChart() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Active Students'],
+                <?php
+                foreach ($pastDaysActiveUsers as $key => $entry ){
+                    echo "['".$pastDaysActiveUsers[$key][3]."'," .$pastDaysActiveUsers[$key][2]. "],";
+                }
+                ?>
+            ]);
+
+
+            /*    $pastDaysActiveUsers[$key][4] = date ("d.m.Y",$arr[0]);*/
+
+            // Set chart options
+            var options = {
+                title:'Active Students',
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Number of Students',
+                    viewWindow:{
+                        max:<?php echo count($records) ?>,
+                    }
+                }
+            };
+
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.visualization.ColumnChart(document.getElementById('chart_active_students'));
+            chart.draw(data, options);
+        }
+    </script>
+
+
+    <!--Posts and Topics per Week -->
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+
+        // Load the Visualization API and the corechart package.
+        google.charts.load('current', {packages: ['corechart', 'bar']});
+
+        // Set a callback to run when the Google Visualization API is loaded.
+        google.charts.setOnLoadCallback(drawChart);
+
+        // Callback that creates and populates a data table,
+        // instantiates the pie chart, passes in the data and
+        // draws it.
+        function drawChart() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Posts','Topics'],
+                <?php
+                foreach ($postTopics as $key => $entry ){
+                    echo "['".$postTopics[$key][4]."',".$postTopics[$key][2]."," .$postTopics[$key][3]. "],";
+                }
+                ?>
+            ]);
+
+            // Set chart options
+            var options = {
+                title:'New Topics & Posts per Week',
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Number of Posts & Topics',
+                }
+            };
+
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.visualization.ColumnChart(document.getElementById('chart_posts_topics'));
+            chart.draw(data, options);
+        }
+    </script>
+
+
+
+    <!-- Heading View -->
+    <div style="position: fixed;top: 70px; left:125px; font-family: Arial; z-index: 4">
+        <h2>Course Overview</h2>
+    </div>
     <!-- General Information -->
 
-    <div style="top: 9%; right: 3%; position: absolute; height: 7%; width: 90%;  ">
-        <div style="font-family:Arial;  display: flex;  justify-content:space-around; align-items: center">
+    <div style="top: 150px; right: 15%; column-gap: 40px; position: absolute; width: 70%;
+        display: flex;flex-wrap:wrap;align-content: space-between">
+        <!-- Average Student Activity -->
+        <div style="height: 400px;width: 500px;">
+            <div id="chart_active_students" style="height: 350px;width: 500px;"></div>
+        </div>
+        <!-- New Topic and Topics per week -->
+        <div style="height: 400px;width: 500px;">
+            <div id="chart_posts_topics" style="height: 350px;width: 500px;"></div>
+        </div>
+
+
+        <div style="font-family:Arial; width: 180px; display: flex; flex-direction: column; justify-content:space-around; row-gap:20px; align-items: center">
 
             <!-- Coursestart -->
             <div style="background-color:white;
             text-align: center;
-            padding: 1% 3%;
+             padding: 10px 5px;
+            width: 180px;
             border-radius: 15px ">
                 <p>
                     <span class="blackColor"> Coursestart:</span> <span class ="blueColor"><?php echo $startDate ?></span>
                 </p>
             </div>
 
-            <!-- Enrolled Students -->
+            <!-- Enrolled/Inactive Students -->
             <div style="background-color:white;
             text-align: center;
-            padding: 1% 3%;
+            padding: 10px 5px;
+            width: 180px;
             border-radius: 15px ">
-                <p>
-                    <span class="blackColor"> Enrolled Students:</span> <span class ="blueColor"><?php echo count($records) ?></span>
-                    <br>
-                    <span class="blackColor"> Inactive Students:</span> <span class ="blueColor"><?php echo $amountInactiveUsers ?></span>
-                </p>
+
+
+                <span class="blackColor"> Enrolled Students:</span> <span class ="blueColor"><?php echo count($records) ?></span>
+                <br>
+                <span class="blackColor"> Inactive Students:</span> <span class ="blueColor"><?php echo $amountInactiveUsers ?></span>
+                <br>
+                <form action="<?php echo $CFG->wwwroot.'/local/analytics/index.php?courseid='.$course_id ?>" method="post">
+                    <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
+                        <div>
+                            <input class="inputfield" type="number" min="0" name="daysInactive" placeholder="Set Days Inactive"
+                                   style="font-family: Arial;width:155px; ">
+                        </div>
+                    </div>
+                </form>
             </div>
 
             <!-- Tagged Students -->
             <div style="background-color:white;
                     text-align: center;
-                    padding: 1% 3%;
+                     padding: 10px 5px;
+                     width: 180px;
                     border-radius: 15px ">
                 <p>
-                    <span class="blackColor"><img src="./icons/Pin.png" width="20" height="20">Tagged Students:</span>
+                    <span class="blackColor"><img src="./icons/Pin.png" width="20" height="20">Bookmarked Students:</span>
                 <hr>
                 <span class ="blueColor">
                 <?php
                 $studentAnalyticsUrl = new moodle_url($CFG->wwwroot."/local/analytics/student_analytics.php");
                 foreach ($taggedStudents as $taggedStudents) {
                 ?>
-                <a href=" <?php echo $studentAnalyticsUrl. '?course='. $course_name."&userid=".$taggedStudents->userid ?> " ?>
+                <a href=" <?php echo $studentAnalyticsUrl. '?courseid='. $course_id."&userid=".$taggedStudents->userid ?> " ?>
                 <?php
                 echo ($taggedStudents->name)."</br>";
                 } ?>
@@ -293,57 +384,30 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
                 </p>
             </div>
         </div>
-    </div>
 
-
-    <div style="font-family:Arial;overflow-y: scroll;top:30%; right: 3% ;
-    position: absolute;width:90%; height:70%; top:30%;  display: flex; gap: 10px 40px; flex-wrap: wrap; justify-content:space-evenly;">
-
-
-        <!-- Average Student Activity -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graph->output_gd_png_base64( )?>">
-        </div>
-
-        <!-- Last 3 Notes -->
-        <div style="
-            width:38%; height: 50%; text-align: justify;  padding: 1% 1%;
+            <!-- Last 3 Notes -->
+            <div style="
+            width:490px; height: 350px; text-align: justify;  padding: 10px 5px;
             background-color:white; border-radius: 15px; overflow-y: scroll;
             font-family:Arial;word-wrap:break-word;">
-            <?php
-            echo'<span class="blackColor"> <br>Last Notes:</span><hr>';
+                <?php
+                echo'<span class="blackColor"> <br>Last Notes:</span><hr>';
 
-            foreach (($notes) as $note) {
-                echo "<u>".($note->context)."</u>";
-                echo "<br>";
-                echo ($note->date);
-                echo "<br>";
-                echo ($note->name);
-                echo "<br>";
-                echo "<br>";
-                echo "".$note->notetext ."<br><hr><br>". "";
-            }
+                foreach (($notes) as $note) {
+                    echo "<u>".($note->context)."</u>";
+                    echo "<br>";
+                    echo ($note->date);
+                    echo "<br>";
+                    echo ($note->name);
+                    echo "<br>";
+                    echo "<br>";
+                    echo "".$note->notetext ."<br><hr><br>". "";
+                }
 
-            ?>
+                ?>
 
-        </div>
-
-        <!-- New Topic per week -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graphT->output_gd_png_base64( )?>">
-        </div>
-
-        <!-- New Posts per week -->
-        <div style="width:40%; height: 80%;">
-            <img style='height: 100%; width: 100%; object-fit: contain' src="<?php echo $graphP->output_gd_png_base64( )?>">
-        </div>
-
-
-
-
+            </div>
 
     </div>
-
-
     </body>
 <?php

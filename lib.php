@@ -19,3 +19,23 @@
  * @copyright 2020, You Name <your@email.address>
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+
+function local_analytics_extend_navigation(global_navigation $navigation){
+    global $OUTPUT;
+    $url = $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI'];
+    if ((isset($_GET['id'])) & (str_contains($url, 'course/view.php?id'))){
+
+
+        //If no right to see plugin => return
+        if (!(has_capability('local/analytics:view', CONTEXT_COURSE::instance($_GET['id'])))) {
+            return;
+        }
+
+        $icon = new pix_icon( "scales", "scales", "local_analytics");
+        $main_node = $navigation->add(get_string("Analytics", "local_analytics"), "/local/analytics/index.php/?courseid=".$_GET['id']);
+        $main_node -> nodetype = 1;
+        $main_node -> icon = $icon;
+        $main_node -> forceopen = true;
+        $main_node -> showinflatnavigation = true;
+    }
+}
