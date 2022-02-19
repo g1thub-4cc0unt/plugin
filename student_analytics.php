@@ -841,7 +841,7 @@ foreach ($bookmarks as $bookmark){
 
         <!-- Notes -->
         <div style="
-            height: 30%; width:calc(46% - 10px); text-align: justify;  padding: 10px 5px;
+            height: 300px; width:calc(46% - 10px); text-align: justify;  padding: 10px 5px;
             background-color:white; border-radius: 15px; overflow-y: scroll;
             font-family:Arial;word-wrap:break-word;">
             <?php
@@ -861,7 +861,7 @@ foreach ($bookmarks as $bookmark){
 
         <!-- Material not viewed -->
         <div style="
-            height: 30%;width: calc(46% - 10px); text-align: justify;  padding: 10px 5px;
+            height: 300px;width: calc(46% - 10px); text-align: justify;  padding: 10px 5px;
             background-color:white; border-radius: 15px; overflow-y: scroll;
             font-family:Arial;">
             <?php
@@ -876,7 +876,7 @@ foreach ($bookmarks as $bookmark){
     </div>
 
     <div style="font-family:Arial; right: 15% ;
-    position: absolute;width:70%; top:50%;  display: flex; flex-wrap: wrap; justify-content:space-between; row-gap: 20px">
+    position: absolute;width:70%; top:540px;  display: flex; flex-wrap: wrap; justify-content:space-between; row-gap: 20px">
 
 
     <!-- Average Quiz Grade -->

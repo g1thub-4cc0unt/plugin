@@ -43,6 +43,16 @@ $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
             font-weight:bold;
             font-family:Arial;
         }
+        .gr{
+            height: 45%;
+            width: 46%;
+
+        }
+
+        .divgraph{
+            height: 400px;
+            width: 100%;
+        }
     </style>
 </head>
 
@@ -383,23 +393,23 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
 
         <div style="column-gap: 40px;display: flex;flex-wrap:wrap;align-content: space-between;width: calc(100% - 250px)">
         <!-- Active Students last 7 days -->
-        <div style="height: 400px;width: 500px;">
-            <div id="chart_active_students" style="height: 350px;width: 500px;"></div>
+        <div class="gr">
+            <div id="chart_active_students" class="divgraph"></div>
         </div>
 
         <!-- Active Student past weeks -->
-        <div style="height: 400px;width: 500px;">
-            <div id="chart_active_students_weeks" style="height: 350px;width: 500px;"></div>
+        <div class="gr">
+            <div id="chart_active_students_weeks" class="divgraph"></div>
         </div>
 
         <!-- New Topic and Topics per week -->
-        <div style="height: 400px;width: 500px;">
-            <div id="chart_posts_topics" style="height: 350px;width: 500px;"></div>
+        <div class="gr">
+            <div id="chart_posts_topics" class="divgraph"></div>
         </div>
-
-        <!-- Last 3 Notes -->
-            <div style="
-            width:490px; height: 330px; text-align: justify;  padding: 10px 5px;
+            <!-- Last 3 Notes -->
+            <div class="gr">
+            <div style=" height: 380px;
+            width: calc(100% - 10px); text-align: justify;  padding: 10px 5px;
             background-color:white; border-radius: 15px; overflow-y: scroll;
             font-family:Arial;word-wrap:break-word;">
                 <?php
@@ -417,7 +427,7 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
                 }
 
                 ?>
-
+            </div>
             </div>
         </div>
         <!--General Information -->
