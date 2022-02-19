@@ -23,6 +23,7 @@
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
+global $PAGE, $CFG, $DB;
 
 $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
 ?>
@@ -42,32 +43,21 @@ $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
             font-weight:bold;
             font-family:Arial;
         }
-        .center {
-            margin: 0;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            -ms-transform: translate(-50%, -50%);
-            transform: translate(-50%, -50%);
-        }
-        .divAlign{
-            position:absolute;
-            width:45px;
-            height:45px;
-            left:15px;
-            border-radius: 15px;
-        }
     </style>
 </head>
 
 
 
 <?php
-global $DB;
-global $CFG;
 
 //Read Course Information
 $course_id = required_param("courseid", PARAM_INT);
+$url45 = new moodle_url($CFG->wwwroot."/local/analytics/index.php?courseid=".$course_id);
+
+//Fix Broken Images
+if (isset($_GET["r"])) {
+    redirect($url45);
+}
 $course = getCourseInfo($course_id);
 
 $startDate = $course -> startDate;
@@ -129,14 +119,17 @@ $activeUsers = $DB->get_records_sql($sql, [$courseId, $inactiveGT]);
 $amountInactiveUsers = count($records)-count($activeUsers);
 
 
-//Active Students Graph  86400 = 1 day
+//Active Students Graph  86400 = 1 day & avoid empty graph
+
 $dateNow = date("m/d/Y", time());
 $dateNowEpoch = date_create($dateNow)->format('U');
-
+if ($dateNowEpoch > $endDateEpoch){
+    $dateNowEpoch = $endDateEpoch;
+}
 //[[from, to, amount, date]]
 $pastDaysActiveUsers = array();
 for ($i = 1; $i <= 7; $i++) {
-    $pastDaysActiveUsers[] = array($dateNowEpoch-(86400*(7-$i)),$dateNowEpoch-(86400*((7-1)-$i)),null,null);
+    $pastDaysActiveUsers[] = array($dateNowEpoch-(86400*(7-$i)),$dateNowEpoch-(86400*((7-1)-$i)),0,0);
     //echo date("m/d/Y H:i:s",$pastDaysActiveUsers[$i-1][0])." ".date("m/d/Y H:i:s",$pastDaysActiveUsers[$i-1][1])."<br> ";
 }
 
@@ -152,6 +145,35 @@ foreach ($pastDaysActiveUsers as $key => $arr) {
 }
 
 
+//Active Students Graph  604800 = 1 Week & avoid empty graph
+
+if ($endDateEpoch > time()) {
+    $courseDurationWeeks = (time() - $startDateEpoch) / 604800;
+}else{
+    $courseDurationWeeks = ($endDateEpoch - $startDateEpoch)/604800;
+}
+
+//[[from, to, amount, date]]
+$pastWeeksActiveUsers = array();
+for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
+    $pastWeeksActiveUsers[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),0,0);
+    //echo date("m/d/Y H:i:s",$pastWeeksActiveUsers[$i-1][0])." ".date("m/d/Y H:i:s",$pastWeeksActiveUsers[$i-1][1])."<br> ";
+}
+
+foreach ($pastWeeksActiveUsers as $key => $arr) {
+    $sql = "SELECT DISTINCT userid
+            FROM {logstore_standard_log}
+            WHERE action='viewed' AND target='course'
+            AND courseid=? AND userid IN ('$userIDs') 
+            AND timecreated > ? AND timecreated < ?";
+    $activeUsers = $DB->get_records_sql($sql, [$courseId, $arr[0], $arr[1]]);
+    $pastWeeksActiveUsers[$key][2] = count($activeUsers);
+    $pastWeeksActiveUsers[$key][3] = date("d.m.y",$arr[0]);
+}
+
+
+
+
 
 //New Topics and Posts per week 604800 = 1 week
 $dateNow = date("m/d/Y", time());
@@ -165,7 +187,7 @@ if ($endDateEpoch > time()) {
 //[[from, to, amountPosts, amountTopics,date]]
 $postTopics = array();
 for ($i = 1; $i <= $courseDurationWeeks+1; $i++) {
-    $postTopics[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),null,null,null);
+    $postTopics[] = array($startDateEpoch+(604800*($i-1)),$startDateEpoch+(604800*$i),0,0,0);
 
 }
 
@@ -177,7 +199,7 @@ foreach ($postTopics as $key => $week) {
             WHERE fd.course = ? AND p.created > ? AND p.created < ? AND p.subject LIKE 'Re:%' ";
     $aPosts = $DB->get_records_sql($sql, [$courseId, $week[0], $week[1]]);
     $postTopics[$key][2] = count($aPosts);
-    $postTopics[$key][4] = date("d.m.Y",$week[0]);
+    $postTopics[$key][4] = date("d.m.y",$week[0]);
 
 
     //Read Amount of Topics per Week
@@ -217,10 +239,12 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
     <script type="text/javascript">
 
         // Load the Visualization API and the corechart package.
-        google.charts.load('current', {packages: ['corechart', 'bar']});
+        google.charts.load('current', {packages: ['bar']});
 
         // Set a callback to run when the Google Visualization API is loaded.
         google.charts.setOnLoadCallback(drawChart);
+        google.charts.setOnLoadCallback(drawChartI);
+        google.charts.setOnLoadCallback(drawChartII);
 
         // Callback that creates and populates a data table,
         // instantiates the pie chart, passes in the data and
@@ -243,6 +267,8 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
             // Set chart options
             var options = {
                 title:'Active Students',
+                subtitle:'Number of active students in the last 7 days',
+                legend: { position: 'none' },
                 hAxis: {
                     slantedText:true,
                     slantedTextAngle:45,
@@ -254,29 +280,57 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
                     }
                 }
             };
+            options.colors = [
+                '#001f3f',
+            ];
+
 
             // Instantiate and draw our chart, passing in some options.
-            var chart = new google.visualization.ColumnChart(document.getElementById('chart_active_students'));
-            chart.draw(data, options);
+            var chart = new google.charts.Bar(document.getElementById('chart_active_students'));
+            chart.draw(data, google.charts.Bar.convertOptions(options));
         }
-    </script>
+
+        function drawChartI() {
+
+            // Create the data table.
+            var data = google.visualization.arrayToDataTable([
+                ['Date', 'Active Students'],
+                <?php
+                foreach ($pastWeeksActiveUsers as $key => $entry ){
+                    echo "['".$pastWeeksActiveUsers[$key][3]."'," .$pastWeeksActiveUsers[$key][2]. "],";
+                }
+                ?>
+            ]);
 
 
-    <!--Posts and Topics per Week -->
-    <!--Load the AJAX API-->
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    <script type="text/javascript">
+            /*    $pastDaysActiveUsers[$key][4] = date ("d.m.Y",$arr[0]);*/
 
-        // Load the Visualization API and the corechart package.
-        google.charts.load('current', {packages: ['corechart', 'bar']});
+            // Set chart options
+            var options = {
+                title:'Active Students',
+                subtitle:'Number of active students per week',
+                legend: { position: 'none' },
+                hAxis: {
+                    slantedText:true,
+                    slantedTextAngle:45,
+                },
+                vAxis: {
+                    title: 'Number of Students',
+                    viewWindow:{
+                        max:<?php echo count($records) ?>,
+                    }
+                }
+            };
+            options.colors = [
+                '#0074D9',
+            ];
 
-        // Set a callback to run when the Google Visualization API is loaded.
-        google.charts.setOnLoadCallback(drawChart);
+            // Instantiate and draw our chart, passing in some options.
+            var chart = new google.charts.Bar(document.getElementById('chart_active_students_weeks'));
+            chart.draw(data, google.charts.Bar.convertOptions(options));
+        }
 
-        // Callback that creates and populates a data table,
-        // instantiates the pie chart, passes in the data and
-        // draws it.
-        function drawChart() {
+        function drawChartII() {
 
             // Create the data table.
             var data = google.visualization.arrayToDataTable([
@@ -290,21 +344,31 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
 
             // Set chart options
             var options = {
-                title:'New Topics & Posts per Week',
+                theme: 'material',
+                title:'Forum Activity',
+                subtitle: 'Number of new posts and topics posted per week',
+                legend:{position: 'top', alignment: 'top'},
                 hAxis: {
                     slantedText:true,
-                    slantedTextAngle:45,
+                    slantedTextAngle:90,
                 },
                 vAxis: {
                     title: 'Number of Posts & Topics',
                 }
             };
+            options.colors = [
+                '#3a394a',
+                '#FF4136',
+                ];
 
             // Instantiate and draw our chart, passing in some options.
-            var chart = new google.visualization.ColumnChart(document.getElementById('chart_posts_topics'));
-            chart.draw(data, options);
+            var chart = new google.charts.Bar(document.getElementById('chart_posts_topics'));
+            chart.draw(data, google.charts.Bar.convertOptions(options));
         }
     </script>
+
+
+
 
 
 
@@ -312,21 +376,52 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
     <div style="position: fixed;top: 70px; left:125px; font-family: Arial; z-index: 4">
         <h2>Course Overview</h2>
     </div>
-    <!-- General Information -->
+    <!-- Graphs/Infos -->
 
-    <div style="top: 150px; right: 15%; column-gap: 40px; position: absolute; width: 70%;
+    <div style="top: 140px; right: 15%; column-gap: 40px; position: absolute; width: 70%;
         display: flex;flex-wrap:wrap;align-content: space-between">
-        <!-- Average Student Activity -->
+
+        <div style="column-gap: 40px;display: flex;flex-wrap:wrap;align-content: space-between;width: calc(100% - 250px)">
+        <!-- Active Students last 7 days -->
         <div style="height: 400px;width: 500px;">
             <div id="chart_active_students" style="height: 350px;width: 500px;"></div>
         </div>
+
+        <!-- Active Student past weeks -->
+        <div style="height: 400px;width: 500px;">
+            <div id="chart_active_students_weeks" style="height: 350px;width: 500px;"></div>
+        </div>
+
         <!-- New Topic and Topics per week -->
         <div style="height: 400px;width: 500px;">
             <div id="chart_posts_topics" style="height: 350px;width: 500px;"></div>
         </div>
 
+        <!-- Last 3 Notes -->
+            <div style="
+            width:490px; height: 330px; text-align: justify;  padding: 10px 5px;
+            background-color:white; border-radius: 15px; overflow-y: scroll;
+            font-family:Arial;word-wrap:break-word;">
+                <?php
+                echo'<span class="blackColor"> <br>Last Notes:</span><hr>';
 
-        <div style="font-family:Arial; width: 180px; display: flex; flex-direction: column; justify-content:space-around; row-gap:20px; align-items: center">
+                foreach (($notes) as $note) {
+                    echo "<u>".($note->context)."</u>";
+                    echo "<br>";
+                    echo ($note->date);
+                    echo "<br>";
+                    echo ($note->name);
+                    echo "<br>";
+                    echo "<br>";
+                    echo "".$note->notetext ."<br><hr><br>". "";
+                }
+
+                ?>
+
+            </div>
+        </div>
+        <!--General Information -->
+        <div style="font-family:Arial; width: 180px;height: 80%; display: flex; flex-direction: column; justify-content:space-around; row-gap:40px; align-items: center">
 
             <!-- Coursestart -->
             <div style="background-color:white;
@@ -353,9 +448,11 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
                 <br>
                 <form action="<?php echo $CFG->wwwroot.'/local/analytics/index.php?courseid='.$course_id ?>" method="post">
                     <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-                        <div>
-                            <input class="inputfield" type="number" min="0" name="daysInactive" placeholder="Set Days Inactive"
-                                   style="font-family: Arial;width:155px; ">
+                        <div class="tooltip">
+                            <span class="tooltiptext" style="width: 200px">Set the number of days from which a student is considered inactive.</span>
+                            <input  class="inputfield" type="number" min="0" name="daysInactive" placeholder="Days Until Inactive"
+                                    style="font-family: Arial;width:155px; ">
+
                         </div>
                     </div>
                 </form>
@@ -368,7 +465,7 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
                      width: 180px;
                     border-radius: 15px ">
                 <p>
-                    <span class="blackColor"><img src="./icons/Pin.png" width="20" height="20">Bookmarked Students:</span>
+                    <span class="blackColor"><img src="./icons/google/outline_bookmark_black_48dp.png" width="20" height="20">Bookmarked Students:</span>
                 <hr>
                 <span class ="blueColor">
                 <?php
@@ -385,28 +482,6 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
             </div>
         </div>
 
-            <!-- Last 3 Notes -->
-            <div style="
-            width:490px; height: 350px; text-align: justify;  padding: 10px 5px;
-            background-color:white; border-radius: 15px; overflow-y: scroll;
-            font-family:Arial;word-wrap:break-word;">
-                <?php
-                echo'<span class="blackColor"> <br>Last Notes:</span><hr>';
-
-                foreach (($notes) as $note) {
-                    echo "<u>".($note->context)."</u>";
-                    echo "<br>";
-                    echo ($note->date);
-                    echo "<br>";
-                    echo ($note->name);
-                    echo "<br>";
-                    echo "<br>";
-                    echo "".$note->notetext ."<br><hr><br>". "";
-                }
-
-                ?>
-
-            </div>
 
     </div>
     </body>

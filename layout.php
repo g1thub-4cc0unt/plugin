@@ -21,6 +21,21 @@
             outline:none;
         }
 
+        span.blueColor {
+            color:#004C93;
+            font-family:Arial;
+            font-size: 16px;
+        }
+        blueColor {
+            color:#004C93;
+            font-family:Arial;
+        }
+        span.blackColor {
+            color: black;
+            font-weight: bold;
+            font-family: Arial;
+        }
+
         /* Sidebar https://stackoverflow.com/a/63864082 with slight modifications */
         #sidebar{
             width: 65px;
@@ -66,7 +81,7 @@
 
         #sidebar a:hover,
         #sidebar a.active {
-            background: #007FFF;
+            background: #0074D9;
         }
 
         /* Tooltip https://www.w3schools.com/howto/howto_css_tooltip.asp with slight modifications */
@@ -118,7 +133,7 @@
 
         /* Logout Button*/
         .logout a:hover {
-            background-color: #007FFF;
+            background-color: #001f3f;
             transition: all .2s ease-in-out;
         }
 
@@ -134,6 +149,12 @@ global $CFG;
 
 //Read Course Information
 $course_id = required_param("courseid", PARAM_INT);
+
+//Plugin User must be logged in and Role EditingTeacher/Teacher/Admin AND Course must exist
+require_login();
+if (!($DB->record_exists('course', array('id' => $course_id))) OR !(has_capability('local/analytics:view', CONTEXT_COURSE::instance($course_id)))){
+    redirect("$CFG->wwwroot");
+}
 $course = getCourseInfo($course_id);
 
 $startDate = $course -> startDate;
@@ -141,13 +162,6 @@ $startDateEpoch = $course -> startDateEpoch;
 $endDateEpoch = $course -> endDateEpoch;
 $courseId = $course -> id;
 $course_name = $course -> name;
-
-
-//Plugin User must be logged in and Role EditingTeacher/Teacher/Admin
-require_login();
-if (!(has_capability('local/analytics:view', CONTEXT_COURSE::instance($course_id)))){
-    redirect("$CFG->wwwroot");
-}
 
 $url = new moodle_url($CFG->wwwroot."/local/analytics/");
 
@@ -158,7 +172,7 @@ $url = new moodle_url($CFG->wwwroot."/local/analytics/");
 <body style="background-color:#EEEEEE">
 
 <!-- Heading -->
-<div style="width:100%;height:61px;position: absolute;background-image: linear-gradient(to right, #007FFF, #B3D4FF);
+<div style="width:100%;height:61px;position: absolute;background-image: linear-gradient(to right, #001f3f, #0074D9);
         display: flex;
         flex-direction: row;
         justify-content: center;

@@ -22,6 +22,7 @@
 
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
+global $PAGE, $CFG, $DB;
 
 $PAGE->set_url(new moodle_url("/local/analytics/notes.php"));
 
@@ -74,7 +75,7 @@ function getNote($noteid) {
                 border-radius: 15px;
             }
             .button {
-                background-color: #54a9ff;
+                background-color: #0074D9;
                 border: none;
                 color: white;
                 font-family: Arial;
@@ -86,8 +87,41 @@ function getNote($noteid) {
             }
             .button:hover {
                 transition: all .2s ease-in-out;
-                background-color: #007FFF;
+                background-color: #001F3F;
             }
+
+            .buttonSave{
+                background-color: #479152;
+                border: none;
+                color: white;
+                font-family: Arial;
+                padding: 4% 8%;
+                cursor: pointer;
+                text-align: center;
+                font-size: 16px;
+                border-radius: 15px;
+            }
+            .buttonSave:hover{
+                transition: all .2s ease-in-out;
+                background-color: #28502E;
+            }
+
+            .buttonDelete{
+                background-color: #F26157;
+                border: none;
+                color: white;
+                font-family: Arial;
+                padding: 4% 8%;
+                cursor: pointer;
+                text-align: center;
+                font-size: 16px;
+                border-radius: 15px;
+            }
+            .buttonDelete:hover{
+                transition: all .2s ease-in-out;
+                background-color: #A54657;
+            }
+
 
             <!-- "flexboxes" -->
             .flexbox-container{
@@ -149,8 +183,6 @@ function getNote($noteid) {
 
 
 <?php
-global $DB;
-global $CFG;
 
 //Read Course Information
 $course_id = required_param("courseid", PARAM_INT);
@@ -212,7 +244,7 @@ elseif (isset($_POST['scontext'])){
 }
 
 //Edit Note
-if (isset($_POST["action"]) AND ($_POST['noteid'] != 0)   AND $_POST["action"] == "create" ){
+if (isset($_POST["action"]) AND ($_POST['noteid'] != 0) AND $_POST["action"] == "create" ){
     $record = new stdClass();
     $record->id = $_POST["noteid"];
     $record->notetext = $_POST["notetext"];
@@ -281,37 +313,72 @@ if (isset($_GET['sort']) AND (isset($_GET['asc']))) {
     }
 }
 
+
+//Get Students with most notes
+$sql ="SELECT  name, count(*) AS amount
+           FROM {local_analytics_notes}
+           WHERE courseid = ? and name <> ''
+           GROUP BY name
+           ORDER BY count(*) DESC
+           LIMIT 5";
+$studentsP = $DB->get_records_sql($sql,[$courseId]);
+
+$colors = [ '#E3655B', '#CFD186', '#5B8C5A', '#596157', '#001F3F', '#001F3F', '#4D7EA8', '#828489', '#9E90A2', '#B6C2D9'];
+
+$counter = 0;
+foreach ($studentsP as $key => $student){
+    $student -> color = $colors[$counter];
+    $studentsP[$key] = $student;
+    $counter=$counter+1;
+}
+//if empty graph
+if (count($studentsP) == 0){
+    $student = new stdClass();
+    $student -> name = "";
+    $student -> amount = 0;
+    $student -> color = "red";
+    $studentsP[] = $student;
+}
+
+$counter = 5;
 //Get most popular Tags/Context
 $sql ="SELECT  context, count(*) AS amount
            FROM {local_analytics_notes}
-           WHERE courseid = ?
+           WHERE courseid = ? and context <> ''
            GROUP BY context
            ORDER BY count(*) DESC
            LIMIT 5";
 $tags = $DB->get_records_sql($sql,[$courseId]);
 
-//Get Students with most notes
-$sql ="SELECT  name, count(*) AS amount
-           FROM {local_analytics_notes}
-           WHERE courseid = ?
-           GROUP BY name
-           ORDER BY count(*) DESC
-           LIMIT 5";
-$studentsP = $DB->get_records_sql($sql,[$courseId]);
-$colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+foreach ($tags as $key => $tag){
+    $tag -> color = $colors[$counter];
+    $tags[$key] = $tag;
+    $counter=$counter+1;
+}
+//if empty graph
+if (count($tags) == 0){
+    $tag = new stdClass();
+    $tag -> context = "";
+    $tag -> amount = 0;
+    $tag -> color = "blue";
+    $tags[] = $tag;
+}
+
+
 ?>
     <!-- Popular Tags -->
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
-        google.charts.load('current', {'packages':['bar']});
-        google.charts.setOnLoadCallback(drawStuff);
+        google.charts.load('current', {'packages':['corechart']});
+        google.charts.setOnLoadCallback(drawChart);
+        google.charts.setOnLoadCallback(drawChartI);
 
-        function drawStuff() {
+        function drawChart() {
             var data = google.visualization.arrayToDataTable([
-                ['Tag', 'Notes'],
+                ['Tag', 'Notes', {role: 'style'}],
                 <?php
                 foreach($tags as $resource){
-                    echo "['".$resource->context."',".round($resource->amount,2)."],";
+                    echo "['".$resource->context."',".round($resource->amount,2).",'".$resource->color."'],";
                 }
                 ?>
             ]);
@@ -324,46 +391,38 @@ $colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e
                 bars: 'horizontal', // Required for Material Bar Charts.
                 hAxis: {
                     viewWindow:{
-                        max:100,
                     }
                 }
             };
 
-            var chart = new google.charts.Bar(document.getElementById('chart_popular_tags'));
+            var chart = new google.visualization.BarChart(document.getElementById('chart_popular_tags'));
             chart.draw(data, options);
         };
-    </script>
 
     <!-- Students with most Notes -->
-
-    <script type="text/javascript">
-        google.charts.load('current', {'packages':['bar']});
-        google.charts.setOnLoadCallback(drawStufff);
-
-        function drawStufff() {
+        function drawChartI() {
             var data = google.visualization.arrayToDataTable([
                 ['Name', 'Notes', {role: 'style'}],
-                <?php  //.$colors[$key]
+                <?php  //.
                 foreach($studentsP as $key => $student){
-                    echo "['".$student->name."',".round($student->amount,2).",'red'],";
+                    echo "['".$student->name."',".round($student->amount,2).",'".$student->color."'],";
                 }
                 ?>
             ]);
 
             var options = {
-                title: 'Students with most Notes',
+                title: 'Notes Per Student',
                 legend: { position: 'none' },
-                chart: { title: 'Students',
-                    subtitle: ' ' },
+                chart: { title: 'Notes Per Student'},
                 bars: 'horizontal', // Required for Material Bar Charts.
                 hAxis: {
                     viewWindow:{
-                        max:100,
+
                     }
                 }
             };
 
-            var chart = new google.charts.Bar(document.getElementById('chart_popular_students'));
+            var chart = new google.visualization.BarChart(document.getElementById('chart_popular_students'));
             chart.draw(data, options);
         };
     </script>
@@ -428,7 +487,7 @@ $colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e
                               placeholder="Note Text"><?php if (isset($_GET['noteid']))  {echo $noteToEdit->notetext;} ?></textarea>
                     </div>
                     <div>
-                    <button class="button" type="submit" name="save">
+                    <button class="buttonSave" type="submit" name="save">
                         <?php if (isset($_GET['noteid'])) {
                             echo "Save Note";
                         }
@@ -534,7 +593,7 @@ $colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e
                     <form action="<?php echo $url ?>" method="post">
                         <input type="hidden" name="noteid" value="<?php echo $note->id ?>">
                         <input type="hidden" name="action" value="delete">
-                        <button class="button" type="submit" name="delete">Delete</button>
+                        <button class="buttonDelete" type="submit" name="delete">Delete</button>
                     </form>
                     </div>
 

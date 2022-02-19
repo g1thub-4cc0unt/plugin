@@ -23,7 +23,7 @@
 function local_analytics_extend_navigation(global_navigation $navigation){
     global $OUTPUT;
     $url = $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI'];
-    if ((isset($_GET['id'])) & (str_contains($url, 'course/view.php?id'))){
+    if ((isset($_GET['id'])) & (strpos($url, 'course/view.php?id') !== false)){
 
 
         //If no right to see plugin => return
@@ -32,7 +32,7 @@ function local_analytics_extend_navigation(global_navigation $navigation){
         }
 
         $icon = new pix_icon( "scales", "scales", "local_analytics");
-        $main_node = $navigation->add(get_string("Analytics", "local_analytics"), "/local/analytics/index.php/?courseid=".$_GET['id']);
+        $main_node = $navigation->add(get_string("Analytics", "local_analytics"), "/local/analytics/index.php/?courseid=".$_GET['id']."&r");
         $main_node -> nodetype = 1;
         $main_node -> icon = $icon;
         $main_node -> forceopen = true;

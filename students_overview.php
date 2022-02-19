@@ -23,6 +23,7 @@
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
 
+global $PAGE, $CFG, $DB;
 $PAGE->set_url(new moodle_url("/local/analytics/students_overview.php"));
 
 
@@ -142,21 +143,21 @@ function getPostsCreated($userID,$courseID){
 
 function getQuizzesTaken($userID,$courseID){
     global $DB;
-    $sql = "SELECT g.*
-            FROM {quiz} q
-            JOIN {quiz_grades} g ON q.id = g.quiz
-            WHERE q.course = ? AND g.userid = ?";
+    $sql = "SELECT DISTINCT q.id
+        FROM {quiz} q
+        JOIN {quiz_attempts} a ON q.id = a.quiz
+        WHERE q.course = ? AND a.state = 'finished' AND a.userid = ?";
     $quizzes = $DB->get_records_sql($sql, [$courseID,$userID]);
     return count($quizzes);
 }
 
 function getAssignmentsTaken($userID,$courseID){
     global $DB;
-    $sql = "SELECT g.*
+
+    $sql = "SELECT DISTINCT a.id
     FROM {assign} a
-    JOIN {assign_grades} g ON a.id = g.assignment
-    WHERE a.course = ?  AND g.userid = ?
-    AND g.grade IS NOT NULL AND g.grade <> -1";
+    JOIN {assign_submission} s ON a.id = s.assignment
+    WHERE a.course = ? AND s.status = 'submitted' AND s.userid = ? ";
 
     $assignments = $DB->get_records_sql($sql, [$courseID,$userID]);
     return count($assignments);
@@ -184,44 +185,6 @@ function getAssignmentsTaken($userID,$courseID){
                 color: black;
                 font-weight: bold;
                 font-family: Arial;
-            }
-            .center {
-                margin: 0;
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                -ms-transform: translate(-50%, -50%);
-                transform: translate(-50%, -50%);
-            }
-            .divAlign{
-                position:absolute;
-                width:45px;
-                height:45px;
-                left:15px;
-                border-radius: 15px;
-            }
-            .button {
-                background-color: #007FFF;
-                border: none;
-                color: white;
-                font-family: Arial;
-                padding: 1% 2%;
-                cursor: pointer;
-                text-align: center;
-                font-size: 16px;
-            }
-
-            <!-- "flexboxes" -->
-            .flexbox-container{
-                background-color:#3B3C3B;
-                width: 100%;
-                height: auto;
-                display:flex;
-                justify-content: center;
-            }
-            .flexbox-item{
-                width: 300px;
-                margin:10px;
             }
 
             <!-- "W3Schools" -->
@@ -271,8 +234,6 @@ function getAssignmentsTaken($userID,$courseID){
 
 
 <?php
-global $DB;
-global $CFG;
 
 //Read Course Information
 $course_id = required_param("courseid", PARAM_INT);
@@ -396,6 +357,20 @@ if (isset($_GET['tag']) AND ($_GET['tag'] == "true")) {
         $DB->insert_record("local_analytics_tagged", $record);
     }
 }
+
+//Bookmarked Students
+$bookmarkedStudents = array();
+
+$sql = "SELECT userid
+        FROM {local_analytics_tagged}
+        WHERE courseid = ?";
+
+$bookmarks = $DB->get_records_sql($sql, [$courseId]);
+foreach ($bookmarks as $bookmark){
+    $bookmarkedStudents[] = $bookmark -> userid;
+}
+
+
 
 //Students Order by
 if (isset($_GET['sort']) AND (isset($_GET['asc']))) {
@@ -575,7 +550,7 @@ $urlSort = new moodle_url($CFG->wwwroot."/local/analytics/students_overview.php?
                         </a>
                     </div>
                 </div>
-                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Posts <br> Read/Created</span>
+                <div style="width:15%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Posts <br> Read / Created</span>
 
                     <!-- Order by Name -->
                     <div>
@@ -637,7 +612,12 @@ $urlSort = new moodle_url($CFG->wwwroot."/local/analytics/students_overview.php?
                     <div style="width:60px;word-wrap:break-word; text-align: right;">
                         <a href="<?php echo $urlBookmarking."students_overview.php?courseid=".$course_id."&tag=true&uid=".$student->id ?>">
                             <div class="tooltip">
-                                <img src="./icons/Pin.png" width="24px" height="24px">
+                                <img src=<?php if (in_array($student->id, $bookmarkedStudents)){
+                                    echo "./icons/google/outline_bookmark_black_48dp.png";
+                                }
+                                else{
+                                    echo "./icons/google/outline_bookmark_border_black_48dp.png";
+                                }?> width="24px" height="24px">
                                 <span class="tooltiptext">Bookmark Student</span>
                             </div>
                         </a>

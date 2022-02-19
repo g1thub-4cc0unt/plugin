@@ -22,6 +22,7 @@
 
 require_once(__DIR__. "/../../config.php");
 require_once(__DIR__. "/layout.php");
+global $PAGE, $CFG, $DB;
 
 $PAGE->set_url(new moodle_url("/local/analytics/material_usage.php"));
 
@@ -50,45 +51,7 @@ $PAGE->set_url(new moodle_url("/local/analytics/material_usage.php"));
                 font-weight: bold;
                 font-family: Arial;
             }
-            .center {
-                margin: 0;
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                -ms-transform: translate(-50%, -50%);
-                transform: translate(-50%, -50%);
-            }
-            .divAlign{
-                position:absolute;
-                width:45px;
-                height:45px;
-                left:15px;
-                border-radius: 15px;
-            }
-            .button {
-                background-color: #007FFF;
-                border: none;
-                color: white;
-                font-family: Arial;
-                padding: 4% 8%;
-                cursor: pointer;
-                text-align: center;
-                font-size: 16px;
-                border-radius: 15px;
-            }
 
-            <!-- "flexboxes" -->
-            .flexbox-container{
-                background-color:#3B3C3B;
-                width: 100%;
-                height: auto;
-                display:flex;
-                justify-content: center;
-            }
-            .flexbox-item{
-                width: 300px;
-                margin:10px;
-            }
 
             <!-- "W3Schools" -->
             * {
@@ -136,8 +99,6 @@ $PAGE->set_url(new moodle_url("/local/analytics/material_usage.php"));
 
 
 <?php
-global $DB;
-global $CFG;
 
 //Read Course Information
 $course_id = required_param("courseid", PARAM_INT);
@@ -207,15 +168,48 @@ $resourcesViewed = 0; //Overall Resources viewed
 $resourcesToPrint = array();
 
 foreach ($resources as $resource){
-    $sql = "SELECT count(*) as amountviews
+    $sql = "SELECT DISTINCT userid
         FROM {logstore_standard_log} 
         WHERE courseid = ? AND userid IN ('$userIDString') 
         AND action='viewed' AND component = 'mod_resource' AND target = 'course_module' AND objectid = ?";
-    $resourceViewed = $DB->get_record_sql($sql, [$courseId,$resource->id]);
+    $resourceViewed = $DB->get_records_sql($sql, [$courseId,$resource->id]);
+    $resourceViewed = count($resourceViewed);
     $resource -> name = substr($resource -> name, 0,30);
-    $resource -> views = (($resourceViewed -> amountviews)/count($records))*100;
+    $resource -> views = (($resourceViewed)/count($records))*100;
+    $rv = $resource -> views;
+    if ($rv > 75){
+        $resource -> color = '#001F3F';
+    }
+    elseif ($rv > 50){
+        $resource -> color = '#D62828';
+    }
+    elseif ($rv > 25){
+        $resource -> color = '#F77F00';
+    }
+    elseif($rv >= 0){
+        $resource -> color = '#FCBF49';
+    }
+
+    //#EAE2B7
+
+    /*    if ($rv > 75){
+        $resource -> color = '#1e3d59';
+    }
+    elseif ($rv > 50){
+        $resource -> color = '#f5f0e1';
+    }
+    elseif ($rv > 25){
+        $resource -> color = '#ffc13b';
+    }
+    elseif($rv >= 0){
+        $resource -> color = '#ff6e40';
+    }
+*/
+
+
+
     $resourcesToPrint[] = $resource;
-    $resourcesViewed += $resourceViewed -> amountviews;
+    $resourcesViewed += $resourceViewed;
 }
 
 $resourcesViewed = ($resourcesViewed/($amountResources*count($records)))*100;
@@ -229,34 +223,37 @@ usort($resourcesToPrint, function ($a, $b) {
     <!-- Resources viewed -->
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script type="text/javascript">
-        google.charts.load('current', {'packages':['bar']});
-        google.charts.setOnLoadCallback(drawStuff);
+        google.charts.load('current', {'packages':['corechart','bar']});
+        google.charts.setOnLoadCallback(drawChart);
 
-        function drawStuff() {
+        function drawChart() {
             var data = google.visualization.arrayToDataTable([
-                ['Resource', 'Percentage'],
+                ['Resource', 'Percentage',{role: 'style'}],
                 <?php
                 foreach($resourcesToPrint as $resource){
-                    echo "['".$resource->name."',".round($resource->views,2)."],";
+                    echo "['".$resource->name."',".round($resource->views,2).",'".$resource->color."'],";
                 }
                 ?>
             ]);
 
             var options = {
-                title: 'Resources Viewed',
-                legend: { position: 'none' },
-                chart: { title: 'Resources Viewed',
+                title: 'Resource Views',
+                chartArea: {width: '50%', height:'90%'},
+                legend: { position: 'top', alignment:'center' },
+                chart: { title: 'Resource Views',
                     subtitle: ' ' },
                 bars: 'horizontal', // Required for Material Bar Charts.
                 hAxis: {
                     viewWindow:{
                         max:100,
+
                         title: 'Percent',
                     }
                 }
             };
 
-            var chart = new google.charts.Bar(document.getElementById('chart_material_usage'));
+            var chart = new google.visualization.BarChart(document.getElementById('chart_material_usage'));
+
             chart.draw(data, options);
         };
     </script>
@@ -266,61 +263,61 @@ usort($resourcesToPrint, function ($a, $b) {
         <h2>Material Usage</h2>
     </div>
 
-    <!-- Forum Read - Forum Viewed - Percentage -->
+    <!-- Forum Read - Resources Viewed - Percentage - Notes - Graph-->
 
-    <div style="display:flex; position: absolute;right:5%; top: 10%;width: 90%;justify-content:space-evenly;" >
-        <div style="text-align:center; background-color: white; border-radius: 15px; padding: 1% 1%;">
-            <span class="blackColor">Resources Viewed:</span> <span style="color:#004C93;font-family:Arial;"><?php echo round($resourcesViewed,2)."%" ?></span>
-        </div>
-        <div style="text-align:center; background-color: white; border-radius: 15px; padding: 1% 1%;">
-            <span class="blackColor">Forum Read:</span> <span style="color:#004C93;font-family:Arial;"><?php echo round($forumViewed,2)."%" ?></span>
-        </div>
-    </div>
-
-    <div style=" top:18%; position: absolute; right:5%;display: flex; height: 82%; width:90%; justify-content:space-evenly;">
+    <div style=" top:140px; position: absolute; right:15%;display: flex; height: 82%; width:70%; justify-content:space-between;">
 
 
-        <div style="overflow-y: scroll; width:40%;  ">
+        <div style="width:46%;  ">
             <!-- Resources Viewed -->
-                <div id="chart_material_usage" style="height:80%;width: 500px"></div>
+            <div style="width:300px;  margin: 0 auto;text-align:center; background-color: white; border-radius: 15px; padding: 10px 10px;">
+                <span class="blackColor">Average Resource Views:</span> <span style="color:#004C93;font-family:Arial;"><?php echo round($resourcesViewed,2)."%" ?></span>
+            </div>
+            <div style="height: 20px; width: 1px"></div>
+            <div id="chart_material_usage" style="height:95%;width: 100%"></div>
         </div>
 
 
-        <div style="overflow-y: scroll; width:40%; ">
 
-
-            <!-- Posts Viewed -->
-            <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-                <div style="width:25%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Subject</span> </div>
-                <div style="width:15%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Read</span> </div>
-                <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Date</span> </div>
+        <div style=" width:46%; height: 95% ">
+            <div style="width:300px; margin: 0 auto;text-align:center; background-color: white; border-radius: 15px; padding: 10px 10px;">
+                <span class="blackColor">Average Readings Per Post:</span> <span style="color:#004C93;font-family:Arial;"><?php echo round($forumViewed,2)."%" ?></span>
             </div>
-
-            <br>
-            <hr>
-            <br>
-
-        <!-- List Posts -->
-        <?php foreach($postsToPrint as $post){ ?>
-            <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
-
-                <div style="width:25%;word-wrap:break-word;">
-                    <?php echo $post->subject ?>
+            <div style="height: 20px; width: 1px"></div>
+            <div style="overflow-y: scroll; width:100%; height: 100%">
+                <!-- Posts Viewed -->
+                <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
+                    <div style="width:25%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Subject</span> </div>
+                    <div style="width:15%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Read</span> </div>
+                    <div style="width:10%;word-wrap:break-word;"class="blueColor"> <span class="blueColor">Date</span> </div>
                 </div>
 
-                <div style="width:15%;">
-                    <?php echo round(($post->postViewed),2)."%"?>
-                </div>
+                <br>
+                <hr>
+                <br>
 
-                <div style="width:10%;">
-                    <?php echo date('d/m/Y H:i:s', $post->created) ?>
-                </div>
+                <!-- List Posts -->
+                <?php foreach($postsToPrint as $post){ ?>
+                    <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
 
+                        <div style="width:25%;word-wrap:break-word;">
+                            <?php echo $post->subject ?>
+                        </div>
+
+                        <div style="width:15%;">
+                            <?php echo round(($post->postViewed),2)."%"?>
+                        </div>
+
+                        <div style="width:10%;">
+                            <?php echo date('d/m/Y H:i:s', $post->created) ?>
+                        </div>
+
+                    </div>
+                    <br>
+                    <hr>
+                    <br>
+                <?php } ?>
             </div>
-            <br>
-            <hr>
-            <br>
-        <?php } ?>
         </div>
     </div>
 
