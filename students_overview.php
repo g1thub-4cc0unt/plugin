@@ -290,15 +290,14 @@ if (isset($_POST["sname"]) AND $_POST["sname"] != ""){
 $filterNumber = null;
 $setFilter = 0;
 $filter = null;
-//Filter By Name
+//Filter By Quizzes Taken
 if (isset($_POST["sfilter"]) AND $_POST["sfilter"] != ""){
     $parts = explode(":",$_POST["sfilter"]);
 
-    if ($parts[0] == "Quiz Grade"){
+    if (strtoupper($parts[0]) == strtoupper("Quizzes Taken")){
         $setFilter = 1;
         $filter = trim($parts[1], " ");
         $filterNumber = $parts[2];
-        echo $filter;
     }
 
 }
@@ -460,7 +459,7 @@ $urlBookmarking = new moodle_url($CFG->wwwroot."/local/analytics/");
             <!-- Search by Context -->
             <div>
                 <form class="example" action="<?php echo $url ?>" method="post" style="max-width:300px">
-                    <input type="text" placeholder='Filter By "Quiz Grade : <= : 2"' name="sfilter">
+                    <input type="text" placeholder='Filter "Quizzes Taken: <= :2"' name="sfilter">
                     <button>&#128269; </button>
                 </form>
             </div>
@@ -599,8 +598,7 @@ $urlSort = new moodle_url($CFG->wwwroot."/local/analytics/students_overview.php?
                 $analytics_url = new moodle_url($CFG->wwwroot."/local/analytics/student_analytics.php");
                 $url = $analytics_url . "?courseid=". $course_id;
                 foreach($students as $student) {
-                    if (!(($setFilter == 1) AND !version_compare($student->avgQGrade, $filterNumber,$filter))){
-
+                    if (!(($setFilter == 1) AND !version_compare($student->quizzesTaken, $filterNumber,$filter))){
                     } else{
                         continue;
                     }

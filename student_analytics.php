@@ -295,6 +295,9 @@ $records = $DB->get_records_sql($sql, [$courseId]);
 //UserID String + Get Student
 $student = null;
 $userIDs = array();
+if (!isset($_GET["userid"])){
+    redirect("$CFG->wwwroot");
+}
 if (isset($_GET["userid"])){
     $userID = required_param("userid", PARAM_INT);
 

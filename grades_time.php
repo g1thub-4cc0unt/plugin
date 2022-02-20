@@ -526,7 +526,7 @@ foreach ($assignmentGradesO as $key => $week) {
 
             // Create the data table.
             var data = google.visualization.arrayToDataTable([
-                ['Date', 'Students','Place----------holder'],
+                ['Date', 'Number of Students',''],
                 <?php
                 foreach ($assignmentGradesO as $key => $entry ){
                     echo "['".$assignmentGradesO[$key][4]."',".$assignmentGradesO[$key][7].","."0"."],";
@@ -537,7 +537,7 @@ foreach ($assignmentGradesO as $key => $week) {
             // Set chart options
             var options = {
                 title:'Assignment Participation',
-                subtitle:'Number of students that haven taken an assignment',
+                subtitle:'Number of students that have taken an assignment',
                 hAxis: {
                     slantedText:true,
                     slantedTextAngle:45,
@@ -552,7 +552,7 @@ foreach ($assignmentGradesO as $key => $week) {
 
             options.colors = [
                 '#001F3F',
-                '#D62828',
+                'white',
                 '#F77F00',
                 '#FCBF49',
                 '#EAE2B7',
@@ -567,7 +567,7 @@ foreach ($assignmentGradesO as $key => $week) {
 
             // Create the data table.
             var data = google.visualization.arrayToDataTable([
-                ['Date', 'Students','Place----------holder'],
+                ['Date', 'Number of Students',''],
                 <?php
                 foreach ($quizGradesO as $key => $entry ){
                     echo "['".$quizGradesO[$key][4]."',".$quizGradesO[$key][7].","."0"."],";
@@ -578,7 +578,7 @@ foreach ($assignmentGradesO as $key => $week) {
             // Set chart options
             var options = {
                 title:'Quiz Participation',
-                subtitle:'Number of students that haven taken a quiz',
+                subtitle:'Number of students that have taken a quiz',
                 hAxis: {
                     slantedText:true,
                     slantedTextAngle:45,
@@ -593,7 +593,7 @@ foreach ($assignmentGradesO as $key => $week) {
 
             options.colors = [
                 '#4D9DE0',
-                '#E15554',
+                'white',
                 '#E1BC29',
             ];
 

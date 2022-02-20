@@ -137,6 +137,111 @@
             transition: all .2s ease-in-out;
         }
 
+
+        /* https://www.w3schools.com/howto/howto_js_popup_form.asp with modifications*/
+
+        /* Button used to open the contact form - fixed at the bottom of the page */
+        .open-button {
+            background-color: #555;
+            color: white;
+            padding: 16px 20px;
+            border: none;
+            cursor: pointer;
+            opacity: 0.8;
+            position: fixed;
+            bottom: 23px;
+            right: 28px;
+            width: 280px;
+        }
+
+        /* The popup form - hidden by default */
+        .form-popup {
+            display: none;
+            position: fixed;
+            top: 100px;
+            right: 15px;
+            border: 3px solid #f1f1f1;
+            z-index: 9;
+        }
+
+        /* Add styles to the form container */
+        .form-container {
+            max-width: 300px;
+            padding: 10px;
+            background-color: white;
+        }
+
+        /* Full-width input fields */
+        .form-container input[type=text], .form-container input[type=textfield] {
+            width: 100%;
+            padding: 15px;
+            margin: 5px 0 22px 0;
+            border: none;
+            background: #f1f1f1;
+
+
+        }
+
+        /* When the inputs get focus, do something */
+        .form-container input[type=text]:focus, .form-container input[type=password]:focus {
+            background-color: #ddd;
+            outline: none;
+        }
+
+        /* Set a style for the submit/login button */
+        .form-container .btn {
+            background-color: #479152;
+            color: white;
+            padding: 16px 20px;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom:10px;
+            opacity: 0.8;
+        }
+
+        /* Add a red background color to the cancel button */
+        .form-container .cancel {
+            background-color: #F26157;
+        }
+
+        /* Add some hover effects to buttons */
+        .form-container .btn:hover, .open-button:hover {
+            opacity: 1;
+        }
+
+        .buttonSave{
+            background-color: #479152;
+            border: none;
+            color: white;
+            font-family: Arial;
+            padding: 4% 8%;
+            cursor: pointer;
+            text-align: center;
+            font-size: 16px;
+            border-radius: 15px;
+        }
+        .buttonSave:hover{
+            transition: all .2s ease-in-out;
+            background-color: #28502E;
+        }
+
+        .buttonDelete{
+            background-color: #F26157;
+            border: none;
+            color: white;
+            font-family: Arial;
+            padding: 4% 8%;
+            cursor: pointer;
+            text-align: center;
+            font-size: 16px;
+            border-radius: 15px;
+        }
+        .buttonDelete:hover{
+            transition: all .2s ease-in-out;
+            background-color: #A54657;
+        }
+
     </style>
 </head>
 <?php
@@ -148,6 +253,9 @@ global $DB;
 global $CFG;
 
 //Read Course Information
+if (!isset($_GET["courseid"])){
+    redirect("$CFG->wwwroot");
+}
 $course_id = required_param("courseid", PARAM_INT);
 
 //Plugin User must be logged in and Role EditingTeacher/Teacher/Admin AND Course must exist
@@ -166,7 +274,39 @@ $course_name = $course -> name;
 $url = new moodle_url($CFG->wwwroot."/local/analytics/");
 
 
+//Create Note -Top RightButton
+if(isset($_POST["naction"]) AND $_POST["naction"] == "ncreate" ) {
+    $record = new stdClass();
+    $record->notetext = $_POST["ntext"];
+    $record->date = time();
+    $record->courseid = $courseId;
 
+    $nsql = 'SELECT u.id as uid, u.firstname, u.lastname 
+            FROM {course} c
+            JOIN {context} ct ON c.id = ct.instanceid
+            JOIN {role_assignments} ra ON ra.contextid = ct.id
+            JOIN {user} u ON u.id = ra.userid
+            JOIN {role} r ON r.id = ra.roleid
+            WHERE ra.roleid = 5 AND c.id = ?';
+    $nrecords = $DB->get_records_sql($nsql, [$courseId]);
+
+    if(isset($_GET["userid"])){
+        $userID = $_GET["userid"];
+        $nstudent = getStudent($userID, $courseId);
+        foreach ($nrecords as $user){
+            if (($user->uid) == $userID){
+                $nstudent -> firstname = $user -> firstname;
+                $nstudent -> lastname = $user -> lastname;
+            }
+        }
+        $record->name = ($nstudent->firstname) . " " . ($nstudent->lastname);
+    }else{
+        $record->name = "";
+    }
+
+    $record->context = $_POST["ntag"];
+    $DB->insert_record("local_analytics_notes", $record);
+}
 
 ?>
 <body style="background-color:#EEEEEE">
@@ -196,6 +336,14 @@ $url = new moodle_url($CFG->wwwroot."/local/analytics/");
         <img src="./icons/google/outline_logout_white_48dp.png" style="height: 32px; width: 32px;">
     </a>
 </div>
+
+<!-- Create note -->
+<div style="right:15px;top:100px; position: fixed; z-index: 5">
+    <a style="position: relative;cursor: pointer;" onclick="openForm(); ">
+        <img src="./icons/google/outline_add_circle_outline_black_48dp.png" height="32px" width="32px">
+    </a>
+</div>
+
 
 
 <!-- Menu Buttons -->
@@ -234,4 +382,55 @@ $url = new moodle_url($CFG->wwwroot."/local/analytics/");
     </a>
 
 </div>
+
+<!-- Add Note - Button -->
+<?php
+if(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on')
+    $nurl = "https://";
+else
+    $nurl = "http://";
+
+$nurl.= $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
+
+?>
+
+
+<!-- Source https://www.w3schools.com/howto/howto_js_popup_form.asp -->
+<script>
+    function openForm() {
+        document.getElementById("myForm").style.display = "block";
+    }
+
+    function closeForm() {
+        document.getElementById("myForm").style.display = "none";
+    }
+</script>
+
+
+<div class="form-popup" id="myForm">
+    <form action=<?php echo $nurl ?>  method="post" class="form-container">
+        <h2>Create Note</h2>
+
+        <input type="hidden" name="naction" value="ncreate">
+        <label for="ntag"><b>Note Tag</b></label>
+        <input list="predefinedtags" type="text" placeholder="Note Tag" name="ntag" required>
+
+        <label for="ntext"><b>Note Text</b></label>
+        <input type="text" placeholder="Note Text" name="ntext" required>
+
+        <button type="submit" class="btn">Create</button>
+        <button type="button" class="btn cancel" onclick="closeForm()">Close</button>
+
+        <datalist id="predefinedtags">
+            <option value="Activity">
+            <option value="Forum">
+            <option value="General">
+            <option value="Grade">
+            <option value="Material Usage">
+            <option value="Performance">
+
+        </datalist>
+    </form>
+</div>
+
 

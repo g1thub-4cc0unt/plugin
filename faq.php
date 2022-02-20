@@ -58,6 +58,13 @@ $PAGE->set_url(new moodle_url("/local/analytics/faq.php"));
             left:15px;
             border-radius: 15px;
         }
+        p{
+           display:inline-block;
+           background-color: white;
+           width:90%;
+           text-align: justify;
+        }
+
     </style>
 </head>
 
@@ -80,6 +87,11 @@ $course_name = $course -> name;
     <div style="color:black;font-family:arial;position:absolute; width: 90%; left:5%; top:10%; text-align:center;margin:auto" >
         <h1>Current most frequently asked questions</h1>
         <br>
+        <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
+            <h2>What graphs do I see on the analytics page of students ?</h2>
+            <p>On the analytics page for students, graphs are displayed showing which grades were achieved in a quiz/assignment and how long it took the student to submit it. Only data for quizzes and assignments that were actually taken by the user are displayed.</p>
+        </div>
+        <br><br><br>
         <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
             <h2>Can i change the colour or design of the Dashboard?</h2>
             <p>The Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.</p>

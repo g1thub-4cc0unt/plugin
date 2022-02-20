@@ -469,11 +469,13 @@ if (count($tags) == 0){
                     <input type="hidden" name="action" value="create">
                     <input type="hidden" name="noteid" value="<?php if (isset($_GET['noteid']))  {echo $noteToEdit->id;} else echo 0;?>">
                     <div><input type="text" list="predefinedtags" name="context" placeholder="Note Tag" class="inputfield" style="width:180px"
-                           value="<?php if (isset($_GET['noteid']))  {echo $noteToEdit->context;} ?>">
+                           value="<?php if (isset($_GET['noteid']))  {echo $noteToEdit->context;} ?>" required>
                         <datalist id="predefinedtags">
                             <option value="Activity">
+                            <option value="Forum">
                             <option value="General">
                             <option value="Grade">
+                            <option value="Material Usage">
                             <option value="Performance">
 
                         </datalist>
@@ -484,7 +486,7 @@ if (count($tags) == 0){
                     </div>
                     <div>
                     <textarea name="notetext" cols="30" rows="4" class="inputfield" style="width:300px; height: 62px"
-                              placeholder="Note Text"><?php if (isset($_GET['noteid']))  {echo $noteToEdit->notetext;} ?></textarea>
+                              placeholder="Note Text" required><?php if (isset($_GET['noteid']))  {echo $noteToEdit->notetext;} ?></textarea>
                     </div>
                     <div>
                     <button class="buttonSave" type="submit" name="save">
