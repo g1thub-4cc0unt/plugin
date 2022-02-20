@@ -400,7 +400,7 @@ $nurl.= $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
         <input type="text" placeholder="Note Text" name="ntext" required>
 
         <button type="submit"class="btn create">Create</button>
-        <button type="button" class="btn cancel" onclick="closeForm()">Close</button>
+        <button type="button" class="btn cancel" onclick="closeForm()">Cancel</button>
 
         <datalist id="predefinedtags">
             <option value="Activity">
