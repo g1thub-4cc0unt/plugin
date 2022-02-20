@@ -88,8 +88,8 @@ $course_name = $course -> name;
         <h1>Current most frequently asked questions</h1>
         <br>
         <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
-            <h2>What graphs do I see on the analytics page of students ?</h2>
-            <p>On the analytics page for students, graphs are displayed showing which grades were achieved in a quiz/assignment and how long it took the student to submit it. Only data for quizzes and assignments that were actually taken by the user are displayed.</p>
+            <h2>What graphs do I see on the student analytics page?</h2>
+            <p>The student analytics page displays graphs showing what grades were achieved in a quiz/assignment and how long it took the student to complete the submissions. Only data for quizzes and assignments that were actually completed by the user are displayed.</p>
         </div>
         <br><br><br>
         <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
