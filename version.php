@@ -22,7 +22,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version = 2021121509;
+$plugin->version = 2021121510;
 $plugin->requires = 2021051704;
 $plugin->component = 'local_analytics';
 $plugin->maturity = MATURITY_STABLE;;
