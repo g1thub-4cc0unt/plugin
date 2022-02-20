@@ -612,16 +612,16 @@ if (count($tags) == 0){
                 <br>
              <?php } ?>
         </div>
-        <div style=" top:90%; position: absolute; right:15%;display: flex; width:70%; justify-content:space-evenly;">
+        <div style=" top:90%; position: absolute; right:20%;display: flex; width:60%; justify-content:space-between;">
 
 
-            <div style=" width:40%;height:400px;  ">
+            <div style=" width:46%;height:400px;">
                 <!-- Resources Viewed -->
-                <div id="chart_popular_tags" style="height:300px;width: 500px"></div>
+                <div id="chart_popular_tags" style="height:300px;width: 100%"></div>
             </div>
-            <div style=" width:40%;height:400px  ">
+            <div style=" width:46%;height:400px">
                 <!-- Resources Viewed -->
-                <div id="chart_popular_students" style="height:300px;width: 500px"></div>
+                <div id="chart_popular_students" style="height:300px;width: 100%"></div>
             </div>
         </div>
     </div>
