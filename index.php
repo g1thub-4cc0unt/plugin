@@ -45,7 +45,7 @@ $PAGE->set_url(new moodle_url("/local/analytics/index.php"));
         }
         .gr{
             height: 45%;
-            width: 46%;
+            width: 48%;
 
         }
 
@@ -388,7 +388,7 @@ $taggedStudents = $DB->get_records_sql($sql, [$courseId]);
     </div>
     <!-- Graphs/Infos -->
 
-    <div style="top: 140px; right: 15%; column-gap: 40px; position: absolute; width: 70%;
+    <div style="top: 140px; right: 14.9%; column-gap: 40px; position: absolute; width: 70.2%;
         display: flex;flex-wrap:wrap;align-content: space-between">
 
         <div style="column-gap: 40px;display: flex;flex-wrap:wrap;align-content: space-between;width: calc(100% - 250px)">

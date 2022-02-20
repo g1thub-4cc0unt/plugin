@@ -268,7 +268,7 @@ usort($resourcesToPrint, function ($a, $b) {
     <div style=" top:140px; position: absolute; right:15%;display: flex; height: 82%; width:70%; justify-content:space-between;">
 
 
-        <div style="width:46%;  ">
+        <div style="width:46%; ">
             <!-- Resources Viewed -->
             <div style="width:300px;  margin: 0 auto;text-align:center; background-color: white; border-radius: 15px; padding: 10px 10px;">
                 <span class="blackColor">Average Resource Views:</span> <span style="color:#004C93;font-family:Arial;"><?php echo round($resourcesViewed,2)."%" ?></span>
