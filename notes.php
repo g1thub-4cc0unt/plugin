@@ -119,7 +119,7 @@ function getNote($noteid) {
             }
             .buttonDelete:hover{
                 transition: all .2s ease-in-out;
-                background-color: #A54657;
+                background-color: #a83b34;
             }
 
 

@@ -162,6 +162,7 @@
             right: 15px;
             border: 3px solid #f1f1f1;
             z-index: 9;
+            font-family:Arial;
         }
 
         /* Add styles to the form container */
@@ -169,6 +170,7 @@
             max-width: 300px;
             padding: 10px;
             background-color: white;
+            font-family:Arial;
         }
 
         /* Full-width input fields */
@@ -197,50 +199,29 @@
             cursor: pointer;
             width: 100%;
             margin-bottom:10px;
-            opacity: 0.8;
         }
 
         /* Add a red background color to the cancel button */
         .form-container .cancel {
+            transition: all .2s ease-in-out;
             background-color: #F26157;
         }
 
-        /* Add some hover effects to buttons */
-        .form-container .btn:hover, .open-button:hover {
-            opacity: 1;
+        .form-container .cancel:hover {
+            transition: all .2s ease-in-out;
+            background-color: #a83b34;
         }
 
-        .buttonSave{
+        .form-container .create {
+            transition: all .2s ease-in-out;
             background-color: #479152;
-            border: none;
-            color: white;
-            font-family: Arial;
-            padding: 4% 8%;
-            cursor: pointer;
-            text-align: center;
-            font-size: 16px;
-            border-radius: 15px;
         }
-        .buttonSave:hover{
+
+        .form-container .create:hover {
             transition: all .2s ease-in-out;
             background-color: #28502E;
         }
 
-        .buttonDelete{
-            background-color: #F26157;
-            border: none;
-            color: white;
-            font-family: Arial;
-            padding: 4% 8%;
-            cursor: pointer;
-            text-align: center;
-            font-size: 16px;
-            border-radius: 15px;
-        }
-        .buttonDelete:hover{
-            transition: all .2s ease-in-out;
-            background-color: #A54657;
-        }
 
     </style>
 </head>
@@ -407,7 +388,7 @@ $nurl.= $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
 </script>
 
 
-<div class="form-popup" id="myForm">
+<div class="form-popup" id="myForm" font-family="Arial";>
     <form action=<?php echo $nurl ?>  method="post" class="form-container">
         <h2>Create Note</h2>
 
@@ -418,7 +399,7 @@ $nurl.= $_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI'];
         <label for="ntext"><b>Note Text</b></label>
         <input type="text" placeholder="Note Text" name="ntext" required>
 
-        <button type="submit" class="btn">Create</button>
+        <button type="submit"class="btn create">Create</button>
         <button type="button" class="btn cancel" onclick="closeForm()">Close</button>
 
         <datalist id="predefinedtags">
