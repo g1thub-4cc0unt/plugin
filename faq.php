@@ -84,25 +84,25 @@ $course_name = $course -> name;
 ?>
 
 <!-- Questions -->
-    <div style="color:black;font-family:arial;position:absolute; width: 90%; left:5%; top:10%; text-align:center;margin:auto" >
+    <div style="color:black;font-family:arial;position:absolute; width: 70%; left:15%; top:10%; text-align:center;margin:auto" >
         <h1>Current most frequently asked questions</h1>
         <br>
-        <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
+        <div style="display:inline-block; background-color: white; width:99%; padding: 1% 1%;">
             <h2>What graphs do I see on the student analytics page?</h2>
             <p>The student analytics page displays graphs showing what grades were achieved in a quiz/assignment and how long it took the student to complete the submissions. Only data for quizzes and assignments that were actually completed by the user are displayed.</p>
         </div>
         <br><br><br>
-        <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
+        <div style="display:inline-block; background-color: white; width:99%; padding: 1% 1%;">
             <h2>Can i change the colour or design of the Dashboard?</h2>
             <p>The Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.</p>
         </div>
         <br><br><br>
-        <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
+        <div style="display:inline-block; background-color: white; width:99%; padding: 1% 1%;">
             <h2>Is this project open source?</h2>
             <p>The Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.</p>
         </div>
         <br><br><br>
-        <div style="display:inline-block; background-color: white; width:80%; padding: 1% 3%;">
+        <div style="display:inline-block; background-color: white; width:99%; padding: 1% 1%;">
             <h2>Why does this plugin only work on Moodle?</h2>
             <p>The Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. </p>
         </div>

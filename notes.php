@@ -463,7 +463,7 @@ if (count($tags) == 0){
 
     <div>
         <!-- Create/Edit Notes Button and Fields -->
-        <div style="position: absolute; top: 22.5%; right: 20%; position: absolute;  width: 60%;">
+        <div style="position: absolute; top: 22.5%; right: 15%; position: absolute;  width: 70%;">
             <form action="<?php echo $url ?>" method="post">
                 <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
                     <input type="hidden" name="action" value="create">
@@ -505,7 +505,7 @@ if (count($tags) == 0){
         <?php
         $urlSort = new moodle_url($CFG->wwwroot."/local/analytics/notes.php?courseid=".$course_id);
         ?>
-        <div style="overflow-y: scroll; width:60%; height:40%; top:40%; right: 20% ;position: absolute ">
+        <div style="overflow-y: scroll; width:70%; height:40%; top:40%; right: 15% ;position: absolute ">
 
             <div style="font-family:Arial; display: flex;  justify-content:space-evenly;">
                 <div style="width:10%;word-wrap:break-word;display: flex;justify-content: normal;column-gap: 20px;" class="blueColor"> <span class="blueColor">Tag</span>
@@ -612,7 +612,7 @@ if (count($tags) == 0){
                 <br>
              <?php } ?>
         </div>
-        <div style=" top:90%; position: absolute; right:20%;display: flex; width:60%; justify-content:space-between;">
+        <div style=" top:90%; position: absolute; right:15%;display: flex; width:70%; justify-content:space-between;">
 
 
             <div style=" width:46%;height:400px;">
