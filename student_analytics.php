@@ -384,8 +384,19 @@ foreach ($quizGradesO as $key => $week) {
         JOIN {quiz_grades} g ON q.id = g.quiz
         WHERE q.course = ? AND g.userid= ? AND q.timeopen >= ? AND q.timeopen < ?";
     $quizGradeStudent = $DB->get_record_sql($sql, [$courseId, $student->id, $week[0], $week[1]]);
-    if(!is_null($quizGradeStudent->grade)){
-        $quizGradesO[$key][5] = $quizGradeStudent->grade;
+     if(!is_null($quizGradeStudent->grade)){
+        $maxQuizGrade = $quizGrades->maxgrade;
+        $avgGrade = $quizGrades -> avggrade;
+        $avgGrade = normalize($avgGrade, 0, $maxQuizGrade);
+        $quizGradesO[$key][2] = $avgGrade*$normalizationValueQ;
+
+        $stdGrade = $quizGrades -> standardgrade;
+        $stdGrade = normalize($stdGrade, 0, $maxQuizGrade);
+        $quizGradesO[$key][7] = $stdGrade*$normalizationValueQ;
+
+        $studentQGrade =  $quizGradeStudent->grade;
+        $studentQGrade = normalize($studentQGrade, 0, $maxQuizGrade);
+        $quizGradesO[$key][5] = $studentQGrade*$normalizationValueQ;
     }
     //Graph dont show values if quiz not taken
     else{
@@ -396,19 +407,6 @@ foreach ($quizGradesO as $key => $week) {
         $quizGradesO[$key][7] = null;
         $quizGradesO[$key][8] = null;
         continue;
-    }
-
-    if (!is_null($quizGrades->maxgrade)) {
-        $maxQuizGrade = $quizGrades->maxgrade;
-        $avgGrade = $quizGrades -> avggrade;
-        $avgGrade = normalize($avgGrade, 0, $maxQuizGrade);
-        $quizGradesO[$key][2] = $avgGrade*$normalizationValueQ;
-
-        $stdGrade = $quizGrades -> standardgrade;
-        $stdGrade = normalize($stdGrade, 0, $maxQuizGrade);
-        $quizGradesO[$key][7] = $stdGrade*$normalizationValueQ;
-
-        //echo date("m/d/Y H:i:s", $week[0]) . "  " . $week[0] . " " . date("m/d/Y H:i:s", $week[1]) . "  " . $week[1] . " Average Grade: " . ($avgGrade) . "<br>";
     }
 
     //Average Time Quiz
